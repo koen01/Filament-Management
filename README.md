@@ -1,5 +1,20 @@
 # 3D Drucker Filament Manager (lokal)
 
+
+# Filament Management
+
+Web UI zur Verwaltung von Filament-Rollen/Slots (Creality CFS / Moonraker).
+
+## Installation (Release tar.gz)
+
+1. Lade das aktuelle Release `filament-management-x.y.z.tar.gz` herunter und kopiere es auf deinen Pi.
+2. Entpacken & installieren:
+
+```bash
+tar -xzf filament-management-x.y.z.tar.gz
+cd filament-management-x.y.z
+sudo ./scripts/install.sh
+
 **Pfad:** `/opt/3d-drucker-filement/app`
 
 **UI/API Port:** `8005`
