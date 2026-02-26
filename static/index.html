@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Filament Anzeige (K2 Plus / CFS)</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🧵</div>
+        <div>
+          <div class="title">Filament Anzeige</div>
+          <div class="subtitle">&copy; bei jkef 2026</div>
+        </div>
+      </div>
+
+      <div class="badges">
+        <div id="printerBadge" class="badge">Printer: —</div>
+        <div id="cfsBadge" class="badge">CFS: —</div>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="layout">
+        <div class="leftCol">
+          <section class="grid" id="boxesGrid"></section>
+
+          <section class="card" style="margin-top: 16px;">
+            <div class="cardHead">
+              <div class="cardTitle">Aktiv</div>
+              <div id="activeMeta" class="cardMeta">—</div>
+            </div>
+            <div class="activeRow" id="activeRow"></div>
+            <div id="activeLive" class="activeLive" style="display:none;"></div>
+          </section>
+        </div>
+
+        <aside class="rightCol">
+          <section class="card" id="historyCard">
+            <div class="cardHead">
+              <div class="cardTitle">Historie pro Slot</div>
+              <div class="cardMeta">
+                <span class="tag muted">letzte 4</span>
+                <div class="refreshCtl">
+                  <label class="refreshLbl" for="refreshSelect">⟳</label>
+                  <select id="refreshSelect" class="refreshSel" title="Update-Intervall">
+                    <option value="2000">2s</option>
+                    <option value="5000">5s</option>
+                    <option value="10000">10s</option>
+                    <option value="15000">15s</option>
+                    <option value="30000">30s</option>
+                  </select>
+                  <button id="refreshToggle" class="refreshBtn" title="Auto-Update an/aus">⏸</button>
+                </div>
+              </div>
+            </div>
+            <div class="history" id="slotHistory"></div>
+
+            <details class="details" style="margin-top:12px;">
+              <summary>Moonraker-History (gesamt)</summary>
+              <div class="moonHist" id="moonHistory"></div>
+            </details>
+          </section>
+        </aside>
+      </div>
+
+      <footer class="footer">
+        <span>Tip: Wenn Farben/Material nicht angezeigt werden, prüfe in <code>data/config.json</code> die <code>moonraker_url</code>.</span>
+      </footer>
+    </main>
+
+    <!-- cache-bust: force clients to fetch latest app.js after updates -->
+    <script src="/static/app.js?v=20260225-2"></script>
+
+    <!-- Slot / Spool editor (local bookkeeping only; never talks to printer) -->
+    <div id="spoolModal" class="modal" style="display:none;">
+      <div class="modalBackdrop" id="spoolBackdrop"></div>
+      <div class="modalPanel">
+        <div class="modalHead">
+          <div>
+            <div class="modalTitle" id="spoolTitle">Slot</div>
+            <div class="modalSub" id="spoolSub">—</div>
+          </div>
+          <button class="modalClose" id="spoolClose" title="Schließen">✕</button>
+        </div>
+        <div class="modalBody">
+          <div class="formRow">
+            <label>Istgewicht (g)</label>
+            <input id="spoolRemain" type="number" min="0" step="1" placeholder="z.B. 206" />
+            <button id="spoolSaveRemain" class="btn">Übernehmen</button>
+          </div>
+          <div class="formRow">
+            <label>Neue Rolle (g)</label>
+            <input id="spoolStart" type="number" min="1" step="1" placeholder="z.B. 1000" />
+            <button id="spoolSaveStart" class="btn">Rollwechsel</button>
+          </div>
+          <div class="modalStats" id="spoolStats">—</div>
+          <div class="modalHint">Hinweis: Das speichert nur lokal in dieser App (kein POST an den Drucker). Rollwechsel versteckt alte Drucke in der Slot-Historie (bleibt intern gespeichert).</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
