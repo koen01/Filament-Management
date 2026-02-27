@@ -1,0 +1,274 @@
+:root{
+  --bg:#0b0f14;
+  --card:#111824;
+  --card2:#0f1621;
+  --text:#e8eef6;
+  --muted:#98a6b7;
+  --line:#1d2a3a;
+  --pill:#0f2236;
+  --ok:#1f9d55;
+  --bad:#d64545;
+  --warn:#f6b73c;
+  --shadow: 0 14px 40px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  background: radial-gradient(1000px 600px at 20% 0%, #122238 0%, var(--bg) 55%);
+  color:var(--text);
+}
+
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:18px 22px;
+  border-bottom:1px solid var(--line);
+  background: rgba(10,14,20,.7);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top:0;
+  z-index:10;
+}
+
+.brand{display:flex;gap:12px;align-items:center}
+.logo{font-size:28px}
+.title{font-size:18px;font-weight:700;letter-spacing:.2px}
+.subtitle{font-size:12px;color:var(--muted);margin-top:2px}
+
+.badges{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.badge{
+  font-size:12px;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  background: linear-gradient(180deg, rgba(19,30,46,.75), rgba(12,18,28,.75));
+  border-radius:999px;
+}
+.badge.ok{border-color: rgba(31,157,85,.45);}
+.badge.bad{border-color: rgba(214,69,69,.45);}
+.badge.warn{border-color: rgba(246,183,60,.45);}
+
+.container{max-width:1400px;margin:0 auto;padding:18px}
+
+.layout{
+  display:grid;
+  grid-template-columns: 2fr 1fr;
+  gap:14px;
+  align-items:start;
+}
+@media (max-width: 1100px){
+  .layout{grid-template-columns: 1fr;}
+}
+
+.grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap:14px;
+}
+@media (max-width: 420px){
+  .grid{grid-template-columns:1fr}
+}
+
+.card{
+  border:1px solid var(--line);
+  background: linear-gradient(180deg, rgba(17,24,36,.85), rgba(11,15,20,.85));
+  border-radius:22px;
+  /* cleaner look (less glow) */
+  box-shadow: 0 10px 24px rgba(0,0,0,.22);
+  overflow:hidden;
+}
+
+.cardHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:16px 16px 12px;
+  border-bottom:1px solid rgba(29,42,58,.7);
+}
+
+.cardTitle{font-size:16px;font-weight:700}
+.cardMeta{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.refreshCtl{display:flex;align-items:center;gap:8px}
+.refreshLbl{font-size:12px;color:var(--muted)}
+.refreshSel{
+  font-size:12px;
+  color:var(--text);
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(29,42,58,.9);
+  background: rgba(15,34,54,.55);
+  outline:none;
+}
+.refreshBtn{
+  font-size:12px;
+  color:var(--text);
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(29,42,58,.9);
+  background: rgba(15,34,54,.55);
+  cursor:pointer;
+}
+.refreshBtn.paused{border-color: rgba(246,183,60,.45);}
+.envItem{
+  font-size:14px;
+  font-weight:700;
+  color: var(--text);
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(29,42,58,.9);
+  background: rgba(15,34,54,.55);
+  line-height:1;
+}
+
+.slots{display:grid;grid-template-columns: repeat(2, minmax(0,1fr));gap:10px;padding:14px}
+
+.slot{
+  border:1px solid rgba(29,42,58,.9);
+  background: linear-gradient(180deg, rgba(15,22,33,.9), rgba(11,15,20,.9));
+  border-radius:18px;
+  padding:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  position:relative;
+  cursor:pointer;
+}
+
+/* Active slot: subtle, no yellow frame/glow */
+.slot.active{
+  outline: none;
+  box-shadow: none;
+  border-color: rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(18,26,38,.92), rgba(12,16,22,.92));
+}
+
+.slotLeft{display:flex;gap:10px;align-items:center;min-width:0}
+.swatch{
+  width:34px;height:34px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.22);
+  flex: 0 0 auto;
+}
+
+.slotText{min-width:0}
+.slotName{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slotSub{font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Spool status inside slot cards */
+.spoolRow{margin-top:6px;}
+.spoolRest{font-size:16px; font-weight:900; color: var(--text); letter-spacing:0.2px; line-height:1.05;}
+.spoolUsed{display:none;}
+
+/* Visual warning when remaining gets low */
+.slot.spoolLow{
+  outline:none;
+  box-shadow:none;
+  border-color: rgba(246,183,60,.22);
+}
+.slot.spoolCrit{
+  outline:none;
+  box-shadow:none;
+  border-color: rgba(255,90,90,.28);
+}
+
+.slotRight{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto}
+.tag{
+  font-size:11px;
+  padding:4px 8px;
+  border-radius:999px;
+  background: rgba(15,34,54,.75);
+  border:1px solid rgba(29,42,58,.9);
+  color: var(--text);
+}
+.tag.muted{color:var(--muted)}
+
+.activeRow{padding:14px;display:flex;gap:12px;flex-wrap:wrap}
+
+/* Active live consumption line */
+.activeLive{padding:0 14px 14px;color:var(--muted);font-size:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.activeLive .pill{border:1px solid rgba(255,255,255,0.08); background:rgba(10,16,24,0.55); border-radius:999px; padding:4px 10px; color:rgba(255,255,255,0.82);}
+
+.details{padding:0 14px 14px;color:var(--muted)}
+.details summary{cursor:pointer;color:var(--text);margin:4px 0 10px}
+.details pre{
+  background: rgba(8,12,18,.65);
+  border:1px solid rgba(29,42,58,.7);
+  border-radius:14px;
+  padding:10px;
+  overflow:auto;
+  color:#cfe2ff;
+  font-size:12px;
+}
+
+.footer{margin:18px 2px 0;color:var(--muted);font-size:12px}
+code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
+
+.history{padding:12px 14px 14px; display:flex; flex-direction:column; gap:12px;}
+
+.moonHist{display:flex; flex-direction:column; gap:10px; margin-top:10px;}
+.moonEntry{border:1px solid rgba(255,255,255,0.06); background:rgba(20,28,40,0.55); border-radius:14px; padding:10px 12px;}
+.moonRow{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.moonJob{font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.moonNums{font-weight:700; color:rgba(255,255,255,0.92); white-space:nowrap;}
+.moonSub{margin-top:6px; display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:rgba(255,255,255,0.72);}
+.miniPills{display:flex; flex-wrap:wrap; gap:6px;}
+.miniPill{border:1px solid rgba(255,255,255,0.08); background:rgba(10,16,24,0.55); border-radius:999px; padding:3px 8px; font-size:12px; color:rgba(255,255,255,0.82);}
+
+/* Moonraker allocation UI (local only) */
+.assignWrap{margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column; gap:10px;}
+.assignTitle{font-size:12px; color:rgba(255,255,255,0.65);}
+.assignRows{display:flex; flex-direction:column; gap:8px;}
+.assignRow{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.assignSel{min-width:170px; background:rgba(10,16,24,0.55); border:1px solid rgba(255,255,255,0.10); color:rgba(255,255,255,0.9); border-radius:12px; padding:7px 10px; outline:none;}
+.assignSel:focus{border-color:rgba(255,215,0,0.35);}
+.assignActions{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+
+/* When an entry is already assigned, keep UI compact.
+   User can click "Ändern" to reveal the assignment UI again. */
+.assignWrap.assigned .assignRows,
+.assignWrap.assigned .assignActions{display:none;}
+.btn.mini{padding:6px 10px; font-size:12px; border-radius:999px; align-self:flex-start;}
+.histSlot{
+  border:1px solid rgba(29,42,58,.8);
+  background: rgba(11,15,20,.55);
+  border-radius:18px;
+  padding:10px;
+}
+.histHead{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.histTitle{display:flex;align-items:center;gap:10px;min-width:0;}
+.histSlotName{font-weight:800;font-size:13px;white-space:nowrap;}
+.histMeta{font-size:12px;color:var(--muted);white-space:nowrap;}
+.histList{margin-top:8px;display:flex;flex-direction:column;gap:8px;}
+.histEntry{border:1px solid rgba(29,42,58,.6);border-radius:14px;background: rgba(15,22,33,.65);padding:8px 10px;}
+.histEntry summary{cursor:pointer; list-style:none;}
+.histEntry summary::-webkit-details-marker{display:none;}
+.histRow{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.histJob{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;}
+.histNums{font-size:12px;color:var(--text);white-space:nowrap;}
+.histSub{margin-top:6px;color:var(--muted);font-size:12px;display:flex;flex-wrap:wrap;gap:10px;}
+
+/* --- Modal (Spool editor) --- */
+.modal{position:fixed;inset:0;z-index:50}
+.modalBackdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.modalPanel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(680px,calc(100% - 32px));border-radius:18px;border:1px solid rgba(255,255,255,.10);background:rgba(10,16,24,.92);box-shadow:0 18px 60px rgba(0,0,0,.55);backdrop-filter: blur(10px)}
+.modalHead{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.modalTitle{font-size:18px;font-weight:800}
+.modalSub{font-size:12px;color:var(--muted);margin-top:2px}
+.modalClose{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff;border-radius:10px;padding:6px 10px;cursor:pointer}
+.modalBody{padding:14px 16px 16px}
+.formRow{display:grid;grid-template-columns:160px 1fr auto;gap:10px;align-items:center;margin-bottom:10px}
+.formRow label{font-size:13px;opacity:.9}
+.formRow input{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);color:#fff}
+.btn{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
+.modalStats{margin-top:8px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.18);font-size:13px;line-height:1.45}
+.modalHint{margin-top:10px;font-size:12px;color:var(--muted)}
+@media (max-width:560px){.formRow{grid-template-columns:1fr}}
