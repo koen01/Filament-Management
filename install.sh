@@ -3,10 +3,11 @@ set -euo pipefail
 
 REPO="jkef80/Filament-Management"
 BRANCH="main"
+
 APP_DIR="/opt/filament-management"
 SERVICE_NAME="filament-management"
 
-# Name der tar.gz im Repo:
+# tar.gz liegt bei dir im Repo-Root:
 ARCHIVE_NAME="filament-management-1.0.2.tar.gz"
 
 if [ "${EUID}" -ne 0 ]; then
@@ -46,7 +47,6 @@ apt install -y curl tar rsync python3 python3-venv python3-pip ca-certificates
 TMP_DIR="$(mktemp -d)"
 ARCHIVE_PATH="${TMP_DIR}/${ARCHIVE_NAME}"
 
-# Download tar.gz from repo
 URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${ARCHIVE_NAME}"
 echo "Downloading: ${URL}"
 curl -fL "${URL}" -o "${ARCHIVE_PATH}"
@@ -54,7 +54,6 @@ curl -fL "${URL}" -o "${ARCHIVE_PATH}"
 echo "Extracting..."
 tar -xzf "${ARCHIVE_PATH}" -C "${TMP_DIR}"
 
-# Find extracted folder (created by --transform)
 SRC_DIR="$(find "${TMP_DIR}" -maxdepth 1 -type d -name 'filament-management-*' | head -n 1)"
 if [ -z "${SRC_DIR}" ]; then
   echo "ERROR: could not find extracted folder"
@@ -64,11 +63,11 @@ fi
 echo "Installing to: ${APP_DIR}"
 mkdir -p "${APP_DIR}"
 
-# sync code, keep data
+# Code drüber kopieren, data/ behalten
 rsync -a --delete --exclude "data/" "${SRC_DIR}/" "${APP_DIR}/"
 mkdir -p "${APP_DIR}/data"
 
-# permissions
+# Rechte
 chown -R "${REAL_USER}:${REAL_USER}" "${APP_DIR}"
 chmod -R u+rwX "${APP_DIR}/data"
 
@@ -81,7 +80,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 "
 
-# create config if missing
+# config.json nur wenn nicht vorhanden (wichtig!)
 if [ ! -f "${APP_DIR}/data/config.json" ]; then
   cat > "${APP_DIR}/data/config.json" <<EOF
 {
@@ -98,22 +97,33 @@ else
   echo "Keeping existing ${APP_DIR}/data/config.json"
 fi
 
-# systemd service
-cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
+# >>>>>> WICHTIGER FIX: Port in env-file speichern (keine kaputte Expansion möglich)
+cat > "${APP_DIR}/data/env" <<EOF
+UI_PORT=${UI_PORT}
+EOF
+chown "${REAL_USER}:${REAL_USER}" "${APP_DIR}/data/env"
+chmod 664 "${APP_DIR}/data/env"
+
+# systemd service (PORT kommt aus EnvironmentFile)
+cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<'EOF'
 [Unit]
 Description=Filament Management
 After=network.target
 
 [Service]
-User=${REAL_USER}
-WorkingDirectory=${APP_DIR}
-ExecStart=${APP_DIR}/venv/bin/uvicorn main:app --host 0.0.0.0 --port ${UI_PORT}
+EnvironmentFile=/opt/filament-management/data/env
+WorkingDirectory=/opt/filament-management
+ExecStart=/opt/filament-management/venv/bin/uvicorn main:app --host 0.0.0.0 --port ${UI_PORT}
 Restart=always
 RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# Service soll als REAL_USER laufen (User-Zeile separat setzen)
+# (damit wir den heredoc oben single-quoted lassen können)
+sed -i "s|^\[Service\]$|[Service]\nUser=${REAL_USER}|" "/etc/systemd/system/${SERVICE_NAME}.service"
 
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}"
