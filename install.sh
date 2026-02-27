@@ -3,75 +3,85 @@ set -euo pipefail
 
 APP_DIR="/opt/filament-management"
 SERVICE_NAME="filament-management"
-SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_URL="https://github.com/jkef80/Filament-Management.git"
 
 if [[ ${EUID} -ne 0 ]]; then
-  echo "Please run as root: sudo ./install.sh" >&2
+  echo "Please run with sudo"
   exit 1
 fi
 
-REAL_USER="${SUDO_USER:-}" 
+REAL_USER="${SUDO_USER:-}"
 if [[ -z "$REAL_USER" || "$REAL_USER" == "root" ]]; then
-  echo "This installer must be run via sudo from a normal user (SUDO_USER missing)." >&2
+  echo "Run via sudo from normal user"
   exit 1
 fi
 
-prompt() {
-  local msg="$1"; local def="$2"; local var
-  read -r -p "$msg (default $def): " var || true
-  echo "${var:-$def}"
+ask() {
+  local prompt="$1"
+  local default="$2"
+  local var
+
+  if [ -r /dev/tty ]; then
+    read -r -p "$prompt [$default]: " var < /dev/tty
+  fi
+
+  echo "${var:-$default}"
 }
 
-UI_PORT="$(prompt "UI Port" "8005")"
-MOON_HOST="$(prompt "Moonraker Host/IP" "192.168.178.148")"
-MOON_PORT="$(prompt "Moonraker Port" "7125")"
-POLL="$(prompt "Poll interval (sec)" "5")"
-DIAM="$(prompt "Filament diameter (mm)" "1.75")"
-read -r -p "CFS Autosync? (y/N): " AUTOSYNC || true
-AUTOSYNC=${AUTOSYNC:-N}
+echo "=== Filament Management Installer ==="
+
+UI_PORT=$(ask "UI Port" "8005")
+MOON_HOST=$(ask "Moonraker Host/IP" "192.168.178.148")
+MOON_PORT=$(ask "Moonraker Port" "7125")
+POLL=$(ask "Poll interval (sec)" "5")
+DIAM=$(ask "Filament diameter (mm)" "1.75")
+AUTOSYNC=$(ask "CFS Autosync? (y/N)" "N")
+
 AUTOSYNC_BOOL=false
 if [[ "$AUTOSYNC" =~ ^[Yy]$ ]]; then AUTOSYNC_BOOL=true; fi
 
-echo ""
-echo "Installing to: $APP_DIR"
+echo "Installing to $APP_DIR"
 
-# deps
 apt-get update -y
-apt-get install -y python3 python3-venv python3-pip rsync
+apt-get install -y python3 python3-venv python3-pip git rsync curl
 
 mkdir -p "$APP_DIR"
 
-# copy code (keep data/)
+echo "Cloning repository..."
+rm -rf /tmp/filament-install
+git clone --depth 1 "$REPO_URL" /tmp/filament-install
+
 rsync -a --delete \
+  --exclude ".git/" \
   --exclude "data/" \
-  --exclude "*.pyc" \
   --exclude "__pycache__/" \
-  "$SRC_DIR/" "$APP_DIR/"
+  /tmp/filament-install/ "$APP_DIR/"
+
+rm -rf /tmp/filament-install
 
 chown -R "$REAL_USER":"$REAL_USER" "$APP_DIR"
 
-# venv + deps
-sudo -u "$REAL_USER" bash -lc "cd '$APP_DIR' && python3 -m venv venv"
-sudo -u "$REAL_USER" bash -lc "cd '$APP_DIR' && source venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt"
+sudo -u "$REAL_USER" bash -lc "
+cd '$APP_DIR'
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+"
 
-# config
 mkdir -p "$APP_DIR/data"
-if [[ ! -f "$APP_DIR/data/config.json" ]]; then
-  cat > "$APP_DIR/data/config.json" <<CFG
+
+cat > "$APP_DIR/data/config.json" <<CFG
 {
-  \"moonraker_url\": \"http://${MOON_HOST}:${MOON_PORT}\",
-  \"poll_interval_sec\": ${POLL},
-  \"filament_diameter_mm\": ${DIAM},
-  \"cfs_autosync\": ${AUTOSYNC_BOOL}
+  "moonraker_url": "http://${MOON_HOST}:${MOON_PORT}",
+  "poll_interval_sec": ${POLL},
+  "filament_diameter_mm": ${DIAM},
+  "cfs_autosync": ${AUTOSYNC_BOOL}
 }
 CFG
-  chown "$REAL_USER":"$REAL_USER" "$APP_DIR/data/config.json"
-  echo "Created $APP_DIR/data/config.json"
-else
-  echo "Keeping existing $APP_DIR/data/config.json"
-fi
 
-# systemd
+chown -R "$REAL_USER":"$REAL_USER" "$APP_DIR/data"
+
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<SVC
 [Unit]
 Description=Filament Management
@@ -95,7 +105,8 @@ systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
 
 IP=$(hostname -I | awk '{print $1}')
+
 echo ""
-echo "✅ Installed & running"
+echo "✅ Installed successfully"
 echo "Open: http://${IP}:${UI_PORT}"
 echo "Logs: sudo journalctl -u ${SERVICE_NAME} -f"
