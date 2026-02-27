@@ -42,6 +42,10 @@ There are no automated tests, linting tools, or CI/CD pipelines configured.
 - **Internal functions** are prefixed with `_` (e.g., `_http_get_json`, `_hist_push`).
 - **Filament calculation:** grams = density × π × (diameter/2)² × length, with material-specific density from profiles.json.
 
+## Spoolman Integration (Optional)
+
+Set `spoolman_url` in `data/config.json` to enable. This app acts as the only bridge between Spoolman and the printer (Moonraker's Spoolman plugin is not used). Spools are linked manually via the slot modal dropdown. On link, `remaining_weight` is imported from Spoolman. Consumption is synced back via `PUT /api/v1/spool/{id}/use` (fire-and-forget) when prints finalize or manual allocations are made. Roll changes auto-unlink the Spoolman spool. All Spoolman calls are best-effort and never block local tracking.
+
 ## Production Deployment
 
 Installs to `/opt/filament-management/` as a systemd service. See `install.sh`, `update.sh`, `uninstall.sh`, and `filament-management.service.example`.

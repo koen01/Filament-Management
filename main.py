@@ -26,6 +26,8 @@ from models.schemas import (
     SetAutoRequest,
     SlotState,
     SpoolApplyUsageRequest,
+    SpoolmanLinkRequest,
+    SpoolmanUnlinkRequest,
     SpoolResetRequest,
     UiSetColorRequest,
     UiSpoolSetRemainingRequest,
@@ -126,6 +128,9 @@ def _ensure_data_files() -> None:
                     "filament_diameter_mm": 1.75,
                     # If true, import material/color/name from detected CFS objects into local slots (read-only to printer)
                     "cfs_autosync": False,
+                    # Optional: Spoolman URL for spool inventory integration
+                    # Example: "http://192.168.178.148:7912"
+                    "spoolman_url": "",
                 },
                 indent=2,
                 ensure_ascii=False,
@@ -181,6 +186,7 @@ def load_config() -> dict:
             "poll_interval_sec": 5,
             "filament_diameter_mm": 1.75,
             "cfs_autosync": False,
+            "spoolman_url": "",
         }
 
 
@@ -237,6 +243,8 @@ def _migrate_state_dict(data: dict) -> dict:
                     sd["remaining_g"] = float(sd["remaining_g"])
                 except Exception:
                     sd["remaining_g"] = None
+            # Spoolman integration (optional)
+            sd.setdefault("spoolman_id", None)
             slots[slot_id] = sd
         # ensure all CFS banks exist (1A-4D)
         for sid in (
@@ -439,6 +447,89 @@ def _http_get_json(url: str, timeout: float = 2.5) -> dict:
     with urlopen(req, timeout=timeout) as r:
         raw = r.read().decode("utf-8", errors="replace")
     return json.loads(raw)
+
+
+def _http_put_json(url: str, body: dict, timeout: float = 3.0) -> dict:
+    """PUT JSON body and return parsed response (stdlib only)."""
+    data = json.dumps(body).encode("utf-8")
+    req = UrlRequest(url, data=data, headers={
+        "User-Agent": "filament-manager/1.0",
+        "Content-Type": "application/json",
+    }, method="PUT")
+    with urlopen(req, timeout=timeout) as r:
+        raw = r.read().decode("utf-8", errors="replace")
+    return json.loads(raw) if raw.strip() else {}
+
+
+# --- Spoolman integration (optional) ---
+
+def _spoolman_base_url() -> str:
+    """Return the configured Spoolman base URL, or empty string if not set."""
+    cfg = load_config()
+    return (cfg.get("spoolman_url") or "").rstrip("/")
+
+
+def _spoolman_get_spools(base: str) -> list[dict]:
+    """GET /api/v1/spool — return non-archived spools."""
+    url = base + "/api/v1/spool"
+    spools = _http_get_json(url, timeout=5.0)
+    if not isinstance(spools, list):
+        return []
+    return [s for s in spools if not s.get("archived", False)]
+
+
+def _spoolman_get_spool(base: str, spool_id: int) -> dict:
+    """GET /api/v1/spool/{id} — return single spool."""
+    url = f"{base}/api/v1/spool/{spool_id}"
+    return _http_get_json(url, timeout=5.0)
+
+
+def _spoolman_report_usage(spool_id: int, grams: float) -> None:
+    """PUT /api/v1/spool/{id}/use — fire-and-forget."""
+    if not spool_id or grams <= 0:
+        return
+    base = _spoolman_base_url()
+    if not base:
+        return
+    try:
+        url = f"{base}/api/v1/spool/{spool_id}/use"
+        _http_put_json(url, {"use_weight": round(grams, 2)})
+        print(f"[SPOOLMAN] reported usage: spool {spool_id} -= {grams:.2f}g")
+    except Exception as e:
+        print(f"[SPOOLMAN] usage report failed for spool {spool_id}: {e}")
+
+
+def _spoolman_report_measure(spool_id: int, weight_g: float) -> None:
+    """PUT /api/v1/spool/{id} — set remaining_weight directly. Fire-and-forget."""
+    if not spool_id:
+        return
+    base = _spoolman_base_url()
+    if not base:
+        return
+    try:
+        url = f"{base}/api/v1/spool/{spool_id}"
+        data = json.dumps({"remaining_weight": round(weight_g, 2)}).encode("utf-8")
+        req = UrlRequest(url, data=data, headers={
+            "User-Agent": "filament-manager/1.0",
+            "Content-Type": "application/json",
+        }, method="PATCH")
+        with urlopen(req, timeout=3.0) as r:
+            r.read()
+        print(f"[SPOOLMAN] reported measure: spool {spool_id} = {weight_g:.2f}g")
+    except Exception as e:
+        print(f"[SPOOLMAN] measure report failed for spool {spool_id}: {e}")
+
+
+def _color_distance(hex1: str, hex2: str) -> float:
+    """Simple Euclidean RGB distance between two hex colors."""
+    try:
+        h1 = hex1.lstrip("#")
+        h2 = hex2.lstrip("#")
+        r1, g1, b1 = int(h1[0:2], 16), int(h1[2:4], 16), int(h1[4:6], 16)
+        r2, g2, b2 = int(h2[0:2], 16), int(h2[2:4], 16), int(h2[4:6], 16)
+        return math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2)
+    except Exception:
+        return 999.0
 
 
 def _moonraker_fetch_history(base: str, limit: int = 20) -> list[dict]:
@@ -958,6 +1049,13 @@ async def moonraker_poll_loop() -> None:
                                     "result": ps_state,
                                 },
                             )
+                            # Sync consumption to Spoolman if linked
+                            try:
+                                slot_obj = st.slots.get(sid)
+                                if slot_obj and getattr(slot_obj, "spoolman_id", None) and g > 0:
+                                    _spoolman_report_usage(slot_obj.spoolman_id, g)
+                            except Exception:
+                                pass
                         except Exception:
                             continue
 
@@ -1116,6 +1214,13 @@ def api_moonraker_allocate(req: MoonrakerAllocateRequest):
             },
         )
         _inc_slot_epoch_consumed(st, sid, float(g))
+        # Sync consumption to Spoolman if linked
+        try:
+            slot_obj = st.slots.get(sid)
+            if slot_obj and getattr(slot_obj, "spoolman_id", None) and float(g) > 0:
+                _spoolman_report_usage(slot_obj.spoolman_id, float(g))
+        except Exception:
+            pass
 
     save_state(st)
     return st
@@ -1171,6 +1276,8 @@ def _ui_state_dict(state: AppState) -> dict:
     d.setdefault("cfs_active_slot", None)
     d.setdefault("cfs_slots", {})
     d.setdefault("cfs_raw", {})
+
+    d["spoolman_configured"] = bool(_spoolman_base_url())
 
     return d
 
@@ -1308,6 +1415,8 @@ def api_ui_spool_set_start(req: UiSpoolSetStartRequest) -> ApiResponse:
     s.spool_ref_remaining_g = start_g
     s.spool_ref_consumed_g = 0.0
     s.spool_ref_set_at = time.time()
+    # Roll change auto-unlinks Spoolman spool
+    s.spoolman_id = None
     # keep legacy fields for debugging only
     s.spool_start_g = start_g
     s.remaining_g = start_g
@@ -1337,6 +1446,129 @@ def api_ui_spool_set_remaining(req: UiSpoolSetRemainingRequest) -> ApiResponse:
     # legacy
     s.remaining_g = rem_g
     state.slots[slot] = s
+    save_state(state)
+
+    # Sync measured weight to Spoolman if linked
+    if getattr(s, "spoolman_id", None):
+        try:
+            _spoolman_report_measure(s.spoolman_id, rem_g)
+        except Exception:
+            pass
+
+    return ApiResponse(result=_ui_state_dict(state))
+
+
+# --- Spoolman integration endpoints ---
+
+@app.get("/api/ui/spoolman/spools")
+def api_ui_spoolman_spools(slot: str = "1A"):
+    """Fetch available Spoolman spools, sorted by match quality for the given slot."""
+    base = _spoolman_base_url()
+    if not base:
+        raise HTTPException(status_code=400, detail="Spoolman URL not configured")
+
+    state = load_state()
+    s = state.slots.get(slot)
+    slot_material = (getattr(s, "material", "PLA") or "PLA").upper() if s else "PLA"
+    slot_color = (getattr(s, "color_hex", "") or "").lower() if s else ""
+
+    try:
+        raw = _spoolman_get_spools(base)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Spoolman unreachable: {e}")
+
+    spools = []
+    for sp in raw:
+        filament = sp.get("filament") or {}
+        mat = (filament.get("material") or "").upper()
+        color_hex = (filament.get("color_hex") or "").lower()
+        name = filament.get("name") or ""
+        vendor = (filament.get("vendor") or {}).get("name", "")
+        remaining = sp.get("remaining_weight")
+
+        # Score: lower is better. Same material gets a big bonus.
+        score = 0
+        if mat == slot_material:
+            score -= 1000
+        if slot_color and color_hex:
+            score += _color_distance(slot_color, color_hex)
+
+        spools.append({
+            "id": sp.get("id"),
+            "filament_name": name,
+            "vendor": vendor,
+            "material": mat,
+            "color_hex": color_hex,
+            "remaining_weight": remaining,
+            "_score": score,
+        })
+
+    spools.sort(key=lambda x: x["_score"])
+    for sp in spools:
+        del sp["_score"]
+
+    return {"spools": spools, "slot": slot}
+
+
+@app.post("/api/ui/spoolman/link", response_model=ApiResponse)
+def api_ui_spoolman_link(req: SpoolmanLinkRequest) -> ApiResponse:
+    """Link a Spoolman spool to a CFS slot. Imports remaining_weight as local reference."""
+    base = _spoolman_base_url()
+    if not base:
+        raise HTTPException(status_code=400, detail="Spoolman URL not configured")
+
+    state = load_state()
+    slot = req.slot
+    if slot not in state.slots:
+        raise HTTPException(status_code=404, detail="Unknown slot")
+
+    try:
+        sp = _spoolman_get_spool(base, req.spoolman_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Spoolman unreachable: {e}")
+
+    # Import remaining_weight from Spoolman
+    rem_g = float(sp.get("remaining_weight") or 0.0)
+    filament = sp.get("filament") or {}
+
+    s = state.slots[slot]
+    s.spoolman_id = req.spoolman_id
+
+    # Import spool metadata from Spoolman
+    mat_raw = (filament.get("material") or "").strip().upper()
+    if mat_raw in ("PLA", "PETG", "ABS", "ASA", "TPU", "PA", "PC"):
+        s.material = mat_raw
+    color_hex = (filament.get("color_hex") or "").strip()
+    if color_hex and len(color_hex) == 7 and color_hex.startswith("#"):
+        s.color_hex = color_hex
+    fname = (filament.get("name") or "").strip()
+    if fname:
+        s.name = fname
+    vendor_name = ((filament.get("vendor") or {}).get("name") or "").strip()
+    if vendor_name:
+        s.manufacturer = vendor_name
+
+    # Set remaining as reference (same logic as set_remaining)
+    consumed_now = _slot_consumed_g_epoch(state, slot)
+    s.spool_ref_remaining_g = rem_g
+    s.spool_ref_consumed_g = float(round(consumed_now, 4))
+    s.spool_ref_set_at = time.time()
+    s.remaining_g = rem_g
+
+    state.slots[slot] = s
+    save_state(state)
+    return ApiResponse(result=_ui_state_dict(state))
+
+
+@app.post("/api/ui/spoolman/unlink", response_model=ApiResponse)
+def api_ui_spoolman_unlink(req: SpoolmanUnlinkRequest) -> ApiResponse:
+    """Clear Spoolman link on a slot. Local tracking is unaffected."""
+    state = load_state()
+    slot = req.slot
+    if slot not in state.slots:
+        raise HTTPException(status_code=404, detail="Unknown slot")
+
+    state.slots[slot].spoolman_id = None
     save_state(state)
     return ApiResponse(result=_ui_state_dict(state))
 

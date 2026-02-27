@@ -36,6 +36,7 @@ MOON_PORT=$(ask "Moonraker Port" "7125")
 POLL=$(ask "Poll interval (sec)" "5")
 DIAM=$(ask "Filament diameter (mm)" "1.75")
 AUTOSYNC=$(ask "CFS Autosync? (y/N)" "N")
+SPOOLMAN_URL=$(ask "Spoolman URL (optional, e.g. http://host:7912)" "")
 
 AUTOSYNC_BOOL=false
 if [[ "$AUTOSYNC" =~ ^[Yy]$ ]]; then AUTOSYNC_BOOL=true; fi
@@ -76,7 +77,8 @@ cat > "$APP_DIR/data/config.json" <<CFG
   "moonraker_url": "http://${MOON_HOST}:${MOON_PORT}",
   "poll_interval_sec": ${POLL},
   "filament_diameter_mm": ${DIAM},
-  "cfs_autosync": ${AUTOSYNC_BOOL}
+  "cfs_autosync": ${AUTOSYNC_BOOL},
+  "spoolman_url": "${SPOOLMAN_URL}"
 }
 CFG
 

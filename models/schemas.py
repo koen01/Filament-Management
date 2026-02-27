@@ -44,6 +44,7 @@ class SlotState(BaseModel):
     spool_start_g: Optional[float] = None
     remaining_g: Optional[float] = None
     notes: str = ""
+    spoolman_id: Optional[int] = None
 
     @field_validator("material", mode="before")
     @classmethod
@@ -235,3 +236,12 @@ class UiSpoolSetRemainingRequest(BaseModel):
 class UiSlotResetRequest(BaseModel):
     slot: SlotId
     remaining_g: float
+
+
+class SpoolmanLinkRequest(BaseModel):
+    slot: SlotId
+    spoolman_id: int = Field(gt=0)
+
+
+class SpoolmanUnlinkRequest(BaseModel):
+    slot: SlotId

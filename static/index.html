@@ -91,6 +91,23 @@
           <button class="modalClose" id="spoolClose" data-i18n-title="modal.close" title="Close">✕</button>
         </div>
         <div class="modalBody">
+          <div id="spoolmanSection" class="spoolmanSection" style="display:none;">
+            <div class="spoolmanHead">
+              <span class="spoolmanTitle" data-i18n="spoolman.section">Spoolman</span>
+              <span id="spoolmanBadge" class="tag muted" data-i18n="spoolman.not_linked">not linked</span>
+            </div>
+            <div id="spoolmanNotLinked" class="spoolmanRow">
+              <select id="spoolmanSelect" class="spoolmanSel"></select>
+              <button id="spoolmanLink" class="btn" data-i18n="spoolman.btn_link">Link</button>
+            </div>
+            <div id="spoolmanLinked" class="spoolmanRow" style="display:none;">
+              <span id="spoolmanInfo" class="spoolmanInfo">—</span>
+              <div class="spoolmanActions">
+                <button id="spoolmanRefresh" class="btn mini" data-i18n="spoolman.btn_refresh">Refresh</button>
+                <button id="spoolmanUnlink" class="btn mini" data-i18n="spoolman.btn_unlink">Unlink</button>
+              </div>
+            </div>
+          </div>
           <div class="formRow">
             <label data-i18n="modal.weigh_label">Current weight (g)</label>
             <input id="spoolRemain" type="number" min="0" step="1" data-i18n-placeholder="modal.weigh_ph" placeholder="e.g. 206" />

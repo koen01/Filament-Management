@@ -179,6 +179,9 @@ async function postJson(url, payload) {
   return r.json();
 }
 
+// --- Spoolman integration ---
+let spoolmanConfigured = false;
+
 // --- Spool editor modal (local only) ---
 let spoolModalOpen = false;
 let spoolPrevPaused = null;
@@ -235,7 +238,88 @@ function openSpoolModal(slotId, meta) {
     }
   }
 
+  // --- Spoolman section ---
+  const smSec = $('spoolmanSection');
+  if (smSec) {
+    if (spoolmanConfigured) {
+      smSec.style.display = '';
+      const badge = $('spoolmanBadge');
+      const notLinked = $('spoolmanNotLinked');
+      const linked = $('spoolmanLinked');
+      const info = $('spoolmanInfo');
+      const smId = meta.spoolman_id;
+      if (smId) {
+        if (badge) { badge.textContent = t('spoolman.linked'); badge.classList.remove('muted'); badge.classList.add('ok'); }
+        if (notLinked) notLinked.style.display = 'none';
+        if (linked) linked.style.display = 'flex';
+        if (info) info.textContent = t('spoolman.linked_info', {
+          id: String(smId),
+          vendor: meta.manufacturer || meta.vendor || '',
+          name: meta.name || '',
+          remaining: fmtG(meta.spool_remaining_g != null ? meta.spool_remaining_g : meta.remaining_g),
+        });
+      } else {
+        if (badge) { badge.textContent = t('spoolman.not_linked'); badge.classList.add('muted'); badge.classList.remove('ok'); }
+        if (notLinked) notLinked.style.display = 'flex';
+        if (linked) linked.style.display = 'none';
+        loadSpoolmanDropdown(slotId);
+      }
+    } else {
+      smSec.style.display = 'none';
+    }
+  }
+
   m.style.display = 'block';
+}
+
+async function loadSpoolmanDropdown(slotId) {
+  const sel = $('spoolmanSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value = '';
+  ph.textContent = t('spoolman.loading');
+  sel.appendChild(ph);
+
+  try {
+    const r = await fetch(`/api/ui/spoolman/spools?slot=${encodeURIComponent(slotId)}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    const spools = data.spools || [];
+    sel.innerHTML = '';
+
+    if (!spools.length) {
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = t('spoolman.no_spools');
+      sel.appendChild(o);
+      return;
+    }
+
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = t('spoolman.select_ph');
+    sel.appendChild(def);
+
+    for (const sp of spools) {
+      const o = document.createElement('option');
+      o.value = String(sp.id);
+      o.textContent = t('spoolman.option_label', {
+        id: String(sp.id),
+        vendor: sp.vendor || '',
+        name: sp.filament_name || '',
+        material: sp.material || '',
+        remaining: sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '?',
+      });
+      sel.appendChild(o);
+    }
+  } catch (e) {
+    sel.innerHTML = '';
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = t('spoolman.error', { msg: e.message || String(e) });
+    sel.appendChild(o);
+  }
 }
 
 function initSpoolModal() {
@@ -291,6 +375,60 @@ function initSpoolModal() {
       await postJson('/api/ui/spool/set_remaining', { slot: spoolSlotId, remaining_g: v });
       closeSpoolModal();
       await tick();
+    };
+  }
+
+  // --- Spoolman button handlers ---
+  const smLink = $('spoolmanLink');
+  const smUnlink = $('spoolmanUnlink');
+  const smRefresh = $('spoolmanRefresh');
+
+  if (smLink) {
+    smLink.onclick = async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!spoolSlotId) return;
+      const sel = $('spoolmanSelect');
+      const id = sel ? Number(sel.value) : 0;
+      if (!id) return;
+      await postJson('/api/ui/spoolman/link', { slot: spoolSlotId, spoolman_id: id });
+      closeSpoolModal();
+      await tick();
+    };
+  }
+
+  if (smUnlink) {
+    smUnlink.onclick = async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!spoolSlotId) return;
+      await postJson('/api/ui/spoolman/unlink', { slot: spoolSlotId });
+      closeSpoolModal();
+      await tick();
+    };
+  }
+
+  if (smRefresh) {
+    smRefresh.onclick = async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!spoolSlotId) return;
+      // Re-link to re-import remaining_weight from Spoolman
+      const info = $('spoolmanInfo');
+      // Get spoolman_id from current state
+      try {
+        const r = await fetch('/api/ui/state', { cache: 'no-store' });
+        const j = await r.json();
+        const st = j.result || j;
+        const slotData = (st.slots || {})[spoolSlotId] || {};
+        const smId = slotData.spoolman_id;
+        if (!smId) return;
+        await postJson('/api/ui/spoolman/link', { slot: spoolSlotId, spoolman_id: smId });
+        closeSpoolModal();
+        await tick();
+      } catch (e) {
+        if (info) info.textContent = t('spoolman.error', { msg: e.message || String(e) });
+      }
     };
   }
 }
@@ -665,6 +803,11 @@ function render(state) {
       spool_epoch: (local.spool_epoch ?? null),
       spool_ref_remaining_g: (local.spool_ref_remaining_g ?? null),
       spool_ref_consumed_g: (local.spool_ref_consumed_g ?? null),
+
+      // Spoolman
+      spoolman_id: (local.spoolman_id ?? null),
+      name: (local.name ?? ''),
+      manufacturer: (local.manufacturer ?? local.vendor ?? ''),
     };
     return out;
   };
@@ -780,7 +923,9 @@ async function tick() {
     const scrollTop = rightCol ? rightCol.scrollTop : null;
     const r = await fetch("/api/ui/state", { cache: "no-store" });
     const j = await r.json();
-    render(j.result || j);
+    const st = j.result || j;
+    spoolmanConfigured = !!st.spoolman_configured;
+    render(st);
     restoreUiState();
     if (rightCol && scrollTop != null) rightCol.scrollTop = scrollTop;
   } catch (e) {

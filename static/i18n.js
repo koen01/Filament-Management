@@ -67,6 +67,20 @@ const I18N = {
     // Footer
     'footer.tip':            'Tip: Wenn Farben/Material nicht angezeigt werden, prüfe in <code>data/config.json</code> die <code>moonraker_url</code>.',
 
+    // Spoolman
+    'spoolman.section':      'Spoolman',
+    'spoolman.not_linked':   'nicht verknüpft',
+    'spoolman.linked':       'verknüpft',
+    'spoolman.linked_info':  'Spool #{id} · {vendor} {name} · {remaining}',
+    'spoolman.btn_link':     'Verknüpfen',
+    'spoolman.btn_unlink':   'Trennen',
+    'spoolman.btn_refresh':  'Aktualisieren',
+    'spoolman.select_ph':    '— Spool wählen —',
+    'spoolman.loading':      'Lade Spools …',
+    'spoolman.error':        'Spoolman-Fehler: {msg}',
+    'spoolman.no_spools':    'Keine Spools gefunden',
+    'spoolman.option_label': '#{id} {vendor} {name} · {material} · {remaining}',
+
     // Language
     'lang.de':               'DE',
     'lang.en':               'EN',
@@ -137,6 +151,20 @@ const I18N = {
 
     // Footer
     'footer.tip':            'Tip: If colors/material are not shown, check <code>moonraker_url</code> in <code>data/config.json</code>.',
+
+    // Spoolman
+    'spoolman.section':      'Spoolman',
+    'spoolman.not_linked':   'not linked',
+    'spoolman.linked':       'linked',
+    'spoolman.linked_info':  'Spool #{id} · {vendor} {name} · {remaining}',
+    'spoolman.btn_link':     'Link',
+    'spoolman.btn_unlink':   'Unlink',
+    'spoolman.btn_refresh':  'Refresh',
+    'spoolman.select_ph':    '— Pick spool —',
+    'spoolman.loading':      'Loading spools…',
+    'spoolman.error':        'Spoolman error: {msg}',
+    'spoolman.no_spools':    'No spools found',
+    'spoolman.option_label': '#{id} {vendor} {name} · {material} · {remaining}',
 
     // Language
     'lang.de':               'DE',
