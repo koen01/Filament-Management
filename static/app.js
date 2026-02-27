@@ -74,7 +74,7 @@ function slotEl(slotId, label, meta, isActive) {
   right.className = "slotRight";
   const tag = document.createElement("div");
   tag.className = "tag" + (!meta.material ? " muted" : "");
-  tag.textContent = meta.present === false ? "leer" : (isActive ? "aktiv" : "bereit");
+  tag.textContent = meta.present === false ? t('status.empty') : (isActive ? t('status.active') : t('status.ready'));
   right.appendChild(tag);
 
   wrap.appendChild(left);
@@ -227,11 +227,11 @@ function openSpoolModal(slotId, meta) {
     const usedG = meta.spool_used_g;
     const totalG = meta.spool_consumed_g;
     if (remG != null && usedG != null) {
-      st.textContent = `Rest (berechnet): ${fmtG(remG)} · verbraucht seit Übernahme: ${fmtG(usedG)} · Gesamt (Slot): ${fmtG(totalG != null ? totalG : 0)}`;
+      st.textContent = t('spool.stats_full', {remaining: fmtG(remG), used: fmtG(usedG), total: fmtG(totalG != null ? totalG : 0)});
     } else if (remG != null) {
-      st.textContent = `Rest (aktuell): ${fmtG(remG)} · Tipp: "Istgewicht" eintragen und Übernehmen.`;
+      st.textContent = t('spool.stats_partial', {remaining: fmtG(remG)});
     } else {
-      st.textContent = 'Noch kein Referenzwert. Trage "Istgewicht" ein und klicke Übernehmen.';
+      st.textContent = t('spool.stats_none');
     }
   }
 
@@ -304,7 +304,7 @@ function renderMoonHistory(state, connectedBoxes) {
   if (!hist.length) {
     const empty = document.createElement("div");
     empty.className = "tag muted";
-    empty.textContent = "Keine Moonraker-History Daten";
+    empty.textContent = t('moon.empty');
     wrap.appendChild(empty);
     return;
   }
@@ -328,7 +328,7 @@ function renderMoonHistory(state, connectedBoxes) {
 
     const job = document.createElement("div");
     job.className = "moonJob";
-    job.textContent = e.job || "(ohne name)";
+    job.textContent = e.job || t('history.no_name');
 
     const nums = document.createElement("div");
     nums.className = "moonNums";
@@ -367,14 +367,14 @@ function renderMoonHistory(state, connectedBoxes) {
 
     const assignTitle = document.createElement("div");
     assignTitle.className = "assignTitle";
-    assignTitle.textContent = existing ? "Zuordnung (lokal gespeichert)" : "Zu Slot zuordnen (lokal)";
+    assignTitle.textContent = existing ? t('assign.title_existing') : t('assign.title_new');
     assign.appendChild(assignTitle);
 
     // When already assigned: keep UI clean, allow optional edit.
     const editBtn = document.createElement("button");
     editBtn.className = "btn mini";
     editBtn.type = "button";
-    editBtn.textContent = existing ? "Ändern" : "";
+    editBtn.textContent = existing ? t('assign.btn_edit') : "";
     editBtn.style.display = existing ? "inline-flex" : "none";
     editBtn.onclick = () => {
       assign.classList.toggle("assigned");
@@ -393,7 +393,7 @@ function renderMoonHistory(state, connectedBoxes) {
       if (selKey) sel.dataset.selkey = selKey;
       const opt0 = document.createElement("option");
       opt0.value = "";
-      opt0.textContent = "— Slot wählen —";
+      opt0.textContent = t('assign.select_default');
       sel.appendChild(opt0);
       for (const sid of slotIds) {
         const o = document.createElement("option");
@@ -414,13 +414,13 @@ function renderMoonHistory(state, connectedBoxes) {
         perColor.push({ color: c, g });
       }
     } else if (gTotal != null && gTotal > 0) {
-      perColor.push({ color: "gesamt", g: Number(gTotal) });
+      perColor.push({ color: t('assign.total'), g: Number(gTotal) });
     }
 
     if (!perColor.length) {
       const note = document.createElement("div");
       note.className = "tag muted";
-      note.textContent = "Kein Verbrauch in History gefunden";
+      note.textContent = t('moon.no_consumption');
       assign.appendChild(note);
     } else {
       // Build UI rows
@@ -447,7 +447,7 @@ function renderMoonHistory(state, connectedBoxes) {
       actions.className = "assignActions";
       const btn = document.createElement("button");
       btn.className = "btn";
-      btn.textContent = existing ? "Zuordnung aktualisieren" : "Zuordnen";
+      btn.textContent = existing ? t('assign.btn_update') : t('assign.btn_assign');
       btn.onclick = async () => {
         try {
           const alloc = {};
@@ -457,7 +457,7 @@ function renderMoonHistory(state, connectedBoxes) {
             alloc[sid] = (alloc[sid] || 0) + Number(it.g || 0);
           }
           if (!Object.keys(alloc).length) {
-            alert("Bitte mindestens einen Slot wählen.");
+            alert(t('assign.alert_select'));
             return;
           }
           const payload = { job_key: key, job: e.job || "", ts: Number(e.ts_end || e.ts_start || 0), alloc_g: alloc };
@@ -465,7 +465,7 @@ function renderMoonHistory(state, connectedBoxes) {
           // Force refresh
           await tick();
         } catch (err) {
-          alert("Konnte nicht speichern: " + (err && err.message ? err.message : String(err)));
+          alert(t('assign.error_save') + (err && err.message ? err.message : String(err)));
         }
       };
       actions.appendChild(btn);
@@ -475,7 +475,7 @@ function renderMoonHistory(state, connectedBoxes) {
         info.className = "tag";
         const parts = [];
         for (const [sid, g] of Object.entries(existing)) parts.push(`${sid}: ${fmtG(g)}`);
-        info.textContent = "Aktuell: " + parts.join(" · ");
+        info.textContent = t('assign.current') + parts.join(" · ");
         actions.appendChild(info);
       }
       assign.appendChild(actions);
@@ -536,7 +536,7 @@ function renderHistory(state, slots, connectedBoxes) {
 
     const nm = document.createElement("div");
     nm.className = "histSlotName";
-    nm.textContent = `Box ${sid[0]} · Slot ${sid[1]}` + (sid === active ? " · aktiv" : "");
+    nm.textContent = `Box ${sid[0]} · Slot ${sid[1]}` + (sid === active ? t('history.active_suffix') : "");
     title.appendChild(nm);
 
     head.appendChild(title);
@@ -561,7 +561,7 @@ function renderHistory(state, slots, connectedBoxes) {
     if (!entries.length) {
       const empty = document.createElement("div");
       empty.className = "tag muted";
-      empty.textContent = "Noch keine Daten";
+      empty.textContent = t('history.no_data');
       list.appendChild(empty);
     } else {
       for (const e of entries) {
@@ -575,7 +575,7 @@ function renderHistory(state, slots, connectedBoxes) {
 
         const job = document.createElement("div");
         job.className = "histJob";
-        job.textContent = (e.job || "(ohne name)");
+        job.textContent = (e.job || t('history.no_name'));
 
         const nums = document.createElement("div");
         nums.className = "histNums";
@@ -614,7 +614,7 @@ function render(state) {
   const cfsBadge = $("cfsBadge");
 
   const printerOk = !!state.printer_connected;
-  badge(printerBadge, printerOk ? "Printer: verbunden" : "Printer: getrennt", printerOk ? "ok" : "bad");
+  badge(printerBadge, printerOk ? t('badge.printer_ok') : t('badge.printer_off'), printerOk ? "ok" : "bad");
   if (!printerOk && state.printer_last_error) {
     printerBadge.textContent += " (" + state.printer_last_error + ")";
   }
@@ -622,7 +622,7 @@ function render(state) {
   const cfsOk = !!state.cfs_connected;
   badge(
     cfsBadge,
-    cfsOk ? ("CFS: erkannt · " + fmtTs(state.cfs_last_update)) : "CFS: —",
+    cfsOk ? t('badge.cfs_ok', {ts: fmtTs(state.cfs_last_update)}) : t('badge.cfs_off'),
     cfsOk ? "ok" : "warn"
   );
 
@@ -784,8 +784,8 @@ async function tick() {
     restoreUiState();
     if (rightCol && scrollTop != null) rightCol.scrollTop = scrollTop;
   } catch (e) {
-    badge($("printerBadge"), "Printer: —", "warn");
-    badge($("cfsBadge"), "CFS: —", "warn");
+    badge($("printerBadge"), t('badge.printer_dash'), "warn");
+    badge($("cfsBadge"), t('badge.cfs_off'), "warn");
   }
 }
 
@@ -832,7 +832,25 @@ function initRefreshControls() {
   applyRefreshTimer();
 }
 
+function initLangSwitcher() {
+  const btns = document.querySelectorAll('.langBtn');
+  function updateActive() {
+    const cur = i18nLang();
+    for (const b of btns) b.classList.toggle('active', b.dataset.lang === cur);
+  }
+  for (const b of btns) {
+    b.addEventListener('click', () => {
+      i18nSetLang(b.dataset.lang);
+      updateActive();
+      tick(); // re-render dynamic content with new language
+    });
+  }
+  updateActive();
+}
+
 function boot() {
+  i18nSetLang(i18nDetectLang());
+  initLangSwitcher();
   initSpoolModal();
   initRefreshControls();
   tick();

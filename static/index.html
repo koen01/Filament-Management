@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Filament Anzeige (K2 Plus / CFS)</title>
+    <title>Filament Display (K2 Plus / CFS)</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
@@ -11,12 +11,16 @@
       <div class="brand">
         <div class="logo">🧵</div>
         <div>
-          <div class="title">Filament Anzeige</div>
+          <div class="title" data-i18n="header.title">Filament Display</div>
           <div class="subtitle">&copy; bei jkef 2026</div>
         </div>
       </div>
 
       <div class="badges">
+        <div class="langSwitch">
+          <button class="langBtn" data-lang="de">DE</button>
+          <button class="langBtn" data-lang="en">EN</button>
+        </div>
         <div id="printerBadge" class="badge">Printer: —</div>
         <div id="cfsBadge" class="badge">CFS: —</div>
       </div>
@@ -29,7 +33,7 @@
 
           <section class="card" style="margin-top: 16px;">
             <div class="cardHead">
-              <div class="cardTitle">Aktiv</div>
+              <div class="cardTitle" data-i18n="section.active">Active</div>
               <div id="activeMeta" class="cardMeta">—</div>
             </div>
             <div class="activeRow" id="activeRow"></div>
@@ -40,26 +44,26 @@
         <aside class="rightCol">
           <section class="card" id="historyCard">
             <div class="cardHead">
-              <div class="cardTitle">Historie pro Slot</div>
+              <div class="cardTitle" data-i18n="section.history">History per Slot</div>
               <div class="cardMeta">
-                <span class="tag muted">letzte 4</span>
+                <span class="tag muted" data-i18n="section.history_last4">last 4</span>
                 <div class="refreshCtl">
                   <label class="refreshLbl" for="refreshSelect">⟳</label>
-                  <select id="refreshSelect" class="refreshSel" title="Update-Intervall">
+                  <select id="refreshSelect" class="refreshSel" data-i18n-title="refresh.title" title="Refresh interval">
                     <option value="2000">2s</option>
                     <option value="5000">5s</option>
                     <option value="10000">10s</option>
                     <option value="15000">15s</option>
                     <option value="30000">30s</option>
                   </select>
-                  <button id="refreshToggle" class="refreshBtn" title="Auto-Update an/aus">⏸</button>
+                  <button id="refreshToggle" class="refreshBtn" data-i18n-title="refresh.toggle_title" title="Auto-refresh on/off">⏸</button>
                 </div>
               </div>
             </div>
             <div class="history" id="slotHistory"></div>
 
             <details class="details" style="margin-top:12px;">
-              <summary>Moonraker-History (gesamt)</summary>
+              <summary data-i18n="section.moon_summary">Moonraker History (total)</summary>
               <div class="moonHist" id="moonHistory"></div>
             </details>
           </section>
@@ -67,12 +71,13 @@
       </div>
 
       <footer class="footer">
-        <span>Tip: Wenn Farben/Material nicht angezeigt werden, prüfe in <code>data/config.json</code> die <code>moonraker_url</code>.</span>
+        <span data-i18n-html="footer.tip">Tip: If colors/material are not shown, check <code>moonraker_url</code> in <code>data/config.json</code>.</span>
       </footer>
     </main>
 
+    <script src="/static/i18n.js"></script>
     <!-- cache-bust: force clients to fetch latest app.js after updates -->
-    <script src="/static/app.js?v=20260225-2"></script>
+    <script src="/static/app.js?v=20260225-3"></script>
 
     <!-- Slot / Spool editor (local bookkeeping only; never talks to printer) -->
     <div id="spoolModal" class="modal" style="display:none;">
@@ -83,21 +88,21 @@
             <div class="modalTitle" id="spoolTitle">Slot</div>
             <div class="modalSub" id="spoolSub">—</div>
           </div>
-          <button class="modalClose" id="spoolClose" title="Schließen">✕</button>
+          <button class="modalClose" id="spoolClose" data-i18n-title="modal.close" title="Close">✕</button>
         </div>
         <div class="modalBody">
           <div class="formRow">
-            <label>Istgewicht (g)</label>
-            <input id="spoolRemain" type="number" min="0" step="1" placeholder="z.B. 206" />
-            <button id="spoolSaveRemain" class="btn">Übernehmen</button>
+            <label data-i18n="modal.weigh_label">Current weight (g)</label>
+            <input id="spoolRemain" type="number" min="0" step="1" data-i18n-placeholder="modal.weigh_ph" placeholder="e.g. 206" />
+            <button id="spoolSaveRemain" class="btn" data-i18n="modal.btn_apply">Apply</button>
           </div>
           <div class="formRow">
-            <label>Neue Rolle (g)</label>
-            <input id="spoolStart" type="number" min="1" step="1" placeholder="z.B. 1000" />
-            <button id="spoolSaveStart" class="btn">Rollwechsel</button>
+            <label data-i18n="modal.newroll_label">New roll (g)</label>
+            <input id="spoolStart" type="number" min="1" step="1" data-i18n-placeholder="modal.newroll_ph" placeholder="e.g. 1000" />
+            <button id="spoolSaveStart" class="btn" data-i18n="modal.btn_rollchange">Roll change</button>
           </div>
           <div class="modalStats" id="spoolStats">—</div>
-          <div class="modalHint">Hinweis: Das speichert nur lokal in dieser App (kein POST an den Drucker). Rollwechsel versteckt alte Drucke in der Slot-Historie (bleibt intern gespeichert).</div>
+          <div class="modalHint" data-i18n="modal.hint">Note: This saves locally in this app only (no POST to printer). Roll change hides old prints in slot history (kept internally).</div>
         </div>
       </div>
     </div>

@@ -272,3 +272,20 @@ code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospa
 .modalStats{margin-top:8px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.18);font-size:13px;line-height:1.45}
 .modalHint{margin-top:10px;font-size:12px;color:var(--muted)}
 @media (max-width:560px){.formRow{grid-template-columns:1fr}}
+
+/* Language switcher */
+.langSwitch{display:flex;gap:4px;align-items:center}
+.langBtn{
+  font-size:11px;
+  font-weight:700;
+  padding:5px 9px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background: rgba(15,34,54,.55);
+  color:var(--muted);
+  cursor:pointer;
+  letter-spacing:.3px;
+  transition: border-color .15s, color .15s;
+}
+.langBtn:hover{border-color:rgba(255,255,255,.25);color:var(--text)}
+.langBtn.active{border-color:rgba(31,157,85,.45);color:var(--text)}

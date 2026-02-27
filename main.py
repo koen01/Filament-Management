@@ -1003,7 +1003,7 @@ async def moonraker_poll_loop() -> None:
 
 
 
-app = FastAPI(title="3D Drucker Filament Manager", version="0.1.1")
+app = FastAPI(title="3D Printer Filament Manager", version="0.1.1")
 
 
 @app.middleware("http")
@@ -1434,14 +1434,23 @@ def api_ui_retract(req: RetractRequest) -> ApiResponse:
 
 
 @app.get("/api/ui/help", response_model=ApiResponse)
-def api_ui_help() -> ApiResponse:
-    text = (
-        "Klick einen Slot, um ihn aktiv zu setzen.\n"
-        "Mit den Farb-Presets setzt du die Farbe auf den aktiven Slot.\n"
-        "Zuführ/Zurückziehen sind aktuell Adapter-Hooks (Dummy), bis wir echte Hardware anbinden.\n"
-        "Job-Verbrauch: Wenn du Moonraker nutzt, trage moonraker_url in data/config.json ein, dann wird der Job + filament_used automatisch übernommen.\n"
-        "Alternativ kannst du manuell /api/ui/job/update nutzen."
-    )
+def api_ui_help(lang: str = "de") -> ApiResponse:
+    if lang == "en":
+        text = (
+            "Click a slot to set it as active.\n"
+            "Use the color presets to set the color on the active slot.\n"
+            "Feed/Retract are currently adapter hooks (dummy) until real hardware is connected.\n"
+            "Job consumption: If you use Moonraker, set moonraker_url in data/config.json — job + filament_used will be picked up automatically.\n"
+            "Alternatively you can use /api/ui/job/update manually."
+        )
+    else:
+        text = (
+            "Klick einen Slot, um ihn aktiv zu setzen.\n"
+            "Mit den Farb-Presets setzt du die Farbe auf den aktiven Slot.\n"
+            "Zuführ/Zurückziehen sind aktuell Adapter-Hooks (Dummy), bis wir echte Hardware anbinden.\n"
+            "Job-Verbrauch: Wenn du Moonraker nutzt, trage moonraker_url in data/config.json ein, dann wird der Job + filament_used automatisch übernommen.\n"
+            "Alternativ kannst du manuell /api/ui/job/update nutzen."
+        )
     return ApiResponse(result={"text": text})
 
 
