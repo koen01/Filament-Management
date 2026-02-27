@@ -59,30 +59,6 @@ Titel:
 
 ---
 
-### GitHub Topics hinzufügen (wichtig!)
-In Settings:
 
-- klipper
-- moonraker
-- 3d-printing
-- creality
-- filament
-- spool-tracking
-
-Das bringt organische Sichtbarkeit.
-
----
-
-# 🧠 3️⃣ Optional: noch professioneller machen
-
-Bevor du postest, könntest du:
-
-- Version-Anzeige in UI anzeigen
-- Screenshot ins README
-- GIF vom Farbwechsel
-- Badge einbauen:
-
-```markdown
-![Release](https://img.shields.io/github/v/release/jkef80/Filament-Management)
 
 © bei jkef 2026
