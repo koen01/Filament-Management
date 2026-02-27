@@ -41,21 +41,6 @@ Titelidee:
 
 ---
 
-### 🔥 Klipper Discord
-Sehr gute Zielgruppe.
-
----
-
-### 🔥 Creality Facebook Gruppen
-Extrem viel Traffic.
-
----
-
-## 💻 Tech / Open Source
-
-### Hacker News (wenn du mutig bist 😄)
-Titel:
-> Show HN: Local Filament Tracking for Klipper + Moonraker
 
 ---
 
