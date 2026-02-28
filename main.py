@@ -242,6 +242,10 @@ def _migrate_state_dict(data: dict) -> dict:
     data.setdefault("cfs_slots", {})
     data.setdefault("ws_slot_length_m", {})
 
+    # Clear the stale "2A" schema default — active_slot is now driven by WS only
+    if data.get("active_slot") == "2A":
+        data["active_slot"] = None
+
     return data
 
 

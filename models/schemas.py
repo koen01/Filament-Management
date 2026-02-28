@@ -46,7 +46,7 @@ class SlotState(BaseModel):
 
 
 class AppState(BaseModel):
-    active_slot: SlotId = "2A"
+    active_slot: Optional[SlotId] = None
     auto_mode: bool = False
     slots: Dict[SlotId, SlotState]
     updated_at: float = Field(default_factory=lambda: time.time())

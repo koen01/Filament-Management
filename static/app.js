@@ -381,7 +381,7 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
   const wrap = $("slotHistory");
   if (!wrap) return;
 
-  const slot = activeSlot || state.active_slot || null;
+  const slot = activeSlot || null;
 
   wrap.innerHTML = '';
   const loading = document.createElement('div');
@@ -483,7 +483,7 @@ function render(state) {
   // We prefer Creality CFS slots (state.cfs_slots). Fallback to local slots if not present.
   const slots = (state.cfs_slots && Object.keys(state.cfs_slots).length) ? state.cfs_slots : state.slots;
 
-  const active = state.cfs_active_slot || state.active_slot || null;
+  const active = state.cfs_active_slot || null;
 
   const boxesGrid = $("boxesGrid");
   boxesGrid.innerHTML = "";
