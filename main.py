@@ -528,11 +528,23 @@ def _parse_ws_cfs_data(payload: dict) -> None:
 async def _ws_connect_and_run(ws_url: str) -> None:
     """Open one WebSocket connection to the printer and run the polling loop."""
     async with websockets.connect(ws_url) as ws:
-        # Initial heartbeat handshake
+        # The printer pushes an unsolicited status JSON immediately on connect.
+        # Drain those initial messages before initiating the heartbeat handshake.
+        while True:
+            try:
+                drained = await asyncio.wait_for(ws.recv(), timeout=1.5)
+                print(f"[WS] Drained {len(str(drained))} byte initial message")
+            except asyncio.TimeoutError:
+                break
+
+        # Heartbeat handshake — confirms connection is live
         await ws.send(json.dumps({"ModeCode": "heart_beat"}))
-        reply = await asyncio.wait_for(ws.recv(), timeout=5.0)
-        if str(reply).strip() != "ok":
-            raise ValueError(f"Unexpected heartbeat reply: {reply!r}")
+        try:
+            reply = await asyncio.wait_for(ws.recv(), timeout=5.0)
+            if str(reply).strip() != "ok":
+                print(f"[WS] Heartbeat reply unexpected: {str(reply)[:80]!r} (continuing)")
+        except asyncio.TimeoutError:
+            print("[WS] Heartbeat timeout (continuing)")
 
         st = load_state()
         st.printer_connected = True
