@@ -51,12 +51,7 @@ class AppState(BaseModel):
     slots: Dict[SlotId, SlotState]
     updated_at: float = Field(default_factory=lambda: time.time())
 
-    # Optional informational fields (UI only)
-    current_job: str = ""
-    current_job_filament_mm: int = 0
-    current_job_filament_g: float = 0.0
-
-    # printer connection info (Moonraker)
+    # printer connection info
     printer_connected: bool = False
     printer_last_error: str = ""
 
@@ -65,24 +60,10 @@ class AppState(BaseModel):
     cfs_last_update: float = 0.0
     cfs_active_slot: Optional[SlotId] = None
     cfs_slots: Dict[str, Any] = Field(default_factory=dict)
-    cfs_raw: Dict[str, Any] = Field(default_factory=dict)
 
-    # Current job tracking to attribute filament to slots during a print.
-    job_track_name: str = ""
-    job_track_started_at: float = 0.0
-    job_track_last_mm: int = 0
-    job_track_slot_mm: Dict[str, int] = Field(default_factory=dict)
-    job_track_slot_g: Dict[str, float] = Field(default_factory=dict)
-    job_track_last_state: str = ""
-
-    # --- Moonraker global history (read-only, best effort) ---
-    moonraker_history: Any = Field(default_factory=list)
-
-    # --- Manual attribution for Moonraker history (local only) ---
-    # Keyed by a stable job key (e.g. "<job_id>:<ts_end>") with value:
-    #   {"job": str, "ts": float}
-    # Used as idempotency marker so the same job is never synced to Spoolman twice.
-    moonraker_allocations: Dict[str, Any] = Field(default_factory=dict)
+    # Per-slot cumulative usedMaterialLength (m) from last WS snapshot.
+    # Used to compute Spoolman usage deltas between updates.
+    ws_slot_length_m: Dict[str, float] = Field(default_factory=dict)
 
     @field_validator("updated_at", mode="before")
     @classmethod
@@ -128,27 +109,6 @@ class FeedRequest(BaseModel):
 
 class RetractRequest(BaseModel):
     mm: float = Field(gt=0, le=200)
-
-
-class JobSetRequest(BaseModel):
-    name: str
-
-
-class JobUpdateRequest(BaseModel):
-    used_mm: int = Field(ge=0)
-    slot: Optional[SlotId] = None
-
-
-class MoonrakerAllocateRequest(BaseModel):
-    """Assign a Moonraker history job (or its per-color parts) to CFS slots.
-
-    This is purely local bookkeeping (no POST to printer).
-    """
-
-    job_key: str
-    job: str
-    ts: float
-    alloc_g: Dict[SlotId, float]
 
 
 # --- UI compatibility (the static UI talks to /api/ui/* and expects {"result": ...}) ---

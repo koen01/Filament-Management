@@ -56,6 +56,13 @@ function slotEl(slotId, label, meta, isActive) {
   tag.textContent = meta.present === false ? t('status.empty') : (isActive ? t('status.active') : t('status.ready'));
   right.appendChild(tag);
 
+  if (meta.percent != null) {
+    const pct = document.createElement("div");
+    pct.className = "spoolPct";
+    pct.textContent = meta.percent + "%";
+    right.appendChild(pct);
+  }
+
   wrap.appendChild(left);
   wrap.appendChild(right);
 
@@ -87,53 +94,6 @@ function fmtUsedFromMm(mm) {
   return m.toFixed(2) + " m";
 }
 
-function buildSlotIds(connectedBoxes) {
-  const slotIds = [];
-  for (const b of connectedBoxes) {
-    for (const l of ["A", "B", "C", "D"]) slotIds.push(`${b}${l}`);
-  }
-  return slotIds;
-}
-
-function jobKeyFromMoon(e) {
-  const base = (e.job_id || e.job || "").toString();
-  const ts = Math.floor(Number(e.ts_end || 0) || 0);
-  return `${base}:${ts}`;
-}
-
-// --- UI state preservation across auto-refresh ---
-// The page re-renders periodically. Without preserving state, <details> elements
-// collapse while the user is interacting (e.g. assigning slots).
-const uiState = {
-  moonOpenKeys: new Set(),
-  moonSelectValues: {},
-};
-
-function captureUiState() {
-  uiState.moonOpenKeys = new Set(
-    Array.from(document.querySelectorAll('#moonHistory details.moonEntry[open]'))
-      .map((d) => d.dataset.key)
-      .filter(Boolean)
-  );
-  uiState.moonSelectValues = {};
-  for (const sel of document.querySelectorAll('#moonHistory select.assignSel')) {
-    const k = sel.dataset.selkey;
-    if (k) uiState.moonSelectValues[k] = sel.value;
-  }
-}
-
-function restoreUiState() {
-  for (const d of document.querySelectorAll('#moonHistory details.moonEntry')) {
-    const k = d.dataset.key;
-    if (k && uiState.moonOpenKeys && uiState.moonOpenKeys.has(k)) d.open = true;
-  }
-  for (const sel of document.querySelectorAll('#moonHistory select.assignSel')) {
-    const k = sel.dataset.selkey;
-    if (k && uiState.moonSelectValues && Object.prototype.hasOwnProperty.call(uiState.moonSelectValues, k)) {
-      sel.value = uiState.moonSelectValues[k];
-    }
-  }
-}
 
 async function postJson(url, payload) {
   const r = await fetch(url, {
@@ -399,190 +359,6 @@ function initSpoolModal() {
   }
 }
 
-function renderMoonHistory(state, connectedBoxes) {
-  const wrap = $("moonHistory");
-  if (!wrap) return;
-  wrap.innerHTML = "";
-
-  const hist = Array.isArray(state.moonraker_history) ? state.moonraker_history : [];
-  if (!hist.length) {
-    const empty = document.createElement("div");
-    empty.className = "tag muted";
-    empty.textContent = t('moon.empty');
-    wrap.appendChild(empty);
-    return;
-  }
-
-  const slotIds = buildSlotIds(connectedBoxes);
-  const allocStore = (state.moonraker_allocations && typeof state.moonraker_allocations === "object") ? state.moonraker_allocations : {};
-
-  for (const e of hist.slice(0, 12)) {
-    const key = jobKeyFromMoon(e);
-    // If this job is already assigned locally, it should disappear from the
-    // Moonraker list (it will show up under "Historie pro Slot").
-    if (allocStore[key]) continue;
-
-    const det = document.createElement("details");
-    det.className = "moonEntry";
-    det.dataset.key = key;
-
-    const sum = document.createElement("summary");
-    const row = document.createElement("div");
-    row.className = "moonRow";
-
-    const job = document.createElement("div");
-    job.className = "moonJob";
-    job.textContent = e.job || t('history.no_name');
-
-    const nums = document.createElement("div");
-    nums.className = "moonNums";
-    const gTotal = (typeof e.filament_used_g_total === "number") ? e.filament_used_g_total : null;
-    const mm = (typeof e.filament_used_mm === "number") ? e.filament_used_mm : null;
-    // primary: grams (user relevant). fallback: meters.
-    nums.textContent = gTotal != null ? fmtG(gTotal) : (mm != null ? fmtUsedFromMm(mm) : "—");
-
-    row.appendChild(job);
-    row.appendChild(nums);
-    sum.appendChild(row);
-    det.appendChild(sum);
-
-    const sub = document.createElement("div");
-    sub.className = "moonSub";
-
-    const when = document.createElement("span");
-    when.textContent = "🕒 " + fmtTs(e.ts_end || e.ts_start);
-    sub.appendChild(when);
-
-    const st = document.createElement("span");
-    st.textContent = "📌 " + String(e.status || "");
-    sub.appendChild(st);
-
-    if (e.filament_type) {
-      const ft = document.createElement("span");
-      ft.textContent = "🧵 " + String(e.filament_type);
-      sub.appendChild(ft);
-    }
-
-    // --- Slot assignment (local) ---
-    const existing = null;
-
-    const assign = document.createElement("div");
-    assign.className = "assignWrap" + (existing ? " assigned" : "");
-
-    const assignTitle = document.createElement("div");
-    assignTitle.className = "assignTitle";
-    assignTitle.textContent = existing ? t('assign.title_existing') : t('assign.title_new');
-    assign.appendChild(assignTitle);
-
-    // When already assigned: keep UI clean, allow optional edit.
-    const editBtn = document.createElement("button");
-    editBtn.className = "btn mini";
-    editBtn.type = "button";
-    editBtn.textContent = existing ? t('assign.btn_edit') : "";
-    editBtn.style.display = existing ? "inline-flex" : "none";
-    editBtn.onclick = () => {
-      assign.classList.toggle("assigned");
-    };
-    assign.appendChild(editBtn);
-
-    const cols = Array.isArray(e.colors) ? e.colors : [];
-    const isMulti = Array.isArray(e.filament_used_g) && e.filament_used_g.length > 1;
-
-    const rows = document.createElement("div");
-    rows.className = "assignRows";
-
-    const makeSelect = (pre, selKey) => {
-      const sel = document.createElement("select");
-      sel.className = "assignSel";
-      if (selKey) sel.dataset.selkey = selKey;
-      const opt0 = document.createElement("option");
-      opt0.value = "";
-      opt0.textContent = t('assign.select_default');
-      sel.appendChild(opt0);
-      for (const sid of slotIds) {
-        const o = document.createElement("option");
-        o.value = sid;
-        o.textContent = `Box ${sid[0]} · ${sid}`;
-        sel.appendChild(o);
-      }
-      if (pre) sel.value = pre;
-      return sel;
-    };
-
-    const perColor = [];
-    if (Array.isArray(e.filament_used_g) && e.filament_used_g.length) {
-      for (let i = 0; i < e.filament_used_g.length; i++) {
-        const g = Number(e.filament_used_g[i] || 0);
-        if (g <= 0) continue;
-        const c = (cols[i] && typeof cols[i] === "string" && cols[i].startsWith("#")) ? cols[i].toUpperCase() : ("#" + String(i + 1));
-        perColor.push({ color: c, g });
-      }
-    } else if (gTotal != null && gTotal > 0) {
-      perColor.push({ color: t('assign.total'), g: Number(gTotal) });
-    }
-
-    if (!perColor.length) {
-      const note = document.createElement("div");
-      note.className = "tag muted";
-      note.textContent = t('moon.no_consumption');
-      assign.appendChild(note);
-    } else {
-      // Build UI rows
-      let idx = 0;
-      for (const it of perColor) {
-        const r = document.createElement("div");
-        r.className = "assignRow";
-
-        const pill = document.createElement("span");
-        pill.className = "miniPill";
-        pill.textContent = `${it.color} · ${fmtG(it.g)}`;
-        r.appendChild(pill);
-
-        const sel = makeSelect("", `${key}:${idx}`);
-        r.appendChild(sel);
-        rows.appendChild(r);
-        it._sel = sel;
-        idx += 1;
-      }
-
-      assign.appendChild(rows);
-
-      const actions = document.createElement("div");
-      actions.className = "assignActions";
-      const btn = document.createElement("button");
-      btn.className = "btn";
-      btn.textContent = existing ? t('assign.btn_update') : t('assign.btn_assign');
-      btn.onclick = async () => {
-        try {
-          const alloc = {};
-          for (const it of perColor) {
-            const sid = it._sel.value;
-            if (!sid) continue;
-            alloc[sid] = (alloc[sid] || 0) + Number(it.g || 0);
-          }
-          if (!Object.keys(alloc).length) {
-            alert(t('assign.alert_select'));
-            return;
-          }
-          const payload = { job_key: key, job: e.job || "", ts: Number(e.ts_end || e.ts_start || 0), alloc_g: alloc };
-          await postJson("/api/ui/moonraker/allocate", payload);
-          // Force refresh
-          await tick();
-        } catch (err) {
-          alert(t('assign.error_save') + (err && err.message ? err.message : String(err)));
-        }
-      };
-      actions.appendChild(btn);
-
-      assign.appendChild(actions);
-    }
-
-    sub.appendChild(assign);
-
-    det.appendChild(sub);
-    wrap.appendChild(det);
-  }
-}
 
 async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
   const wrap = $("slotHistory");
@@ -725,6 +501,9 @@ function render(state) {
       spoolman_id: (local.spoolman_id ?? null),
       name: (local.name ?? ''),
       manufacturer: (local.manufacturer ?? local.vendor ?? ''),
+
+      // CFS percent remaining from WS data
+      percent: (m.percent != null ? m.percent : null),
     };
     return out;
   };
@@ -784,7 +563,6 @@ function render(state) {
 
   // Right-side Spoolman status panel
   fetchAndRenderSpoolmanStatus(active, state);
-  renderMoonHistory(state, connectedBoxes);
 
   // Active card
   const activeRow = $("activeRow");
@@ -798,34 +576,6 @@ function render(state) {
     const m = metaFor(active);
     activeRow.appendChild(slotEl(active, `Box ${active[0]} · Slot ${active[1]}`, m, true));
     $("activeMeta").textContent = m.material ? (m.material + " · " + (m.color ? m.color.toUpperCase() : "")) : "—";
-
-    // Live consumption while printing: use slot mm deltas (job_track_slot_mm)
-    // and convert to grams using the current job's g/mm ratio (if available).
-    const isPrinting = String(state.job_track_last_state || "").toLowerCase() === "printing";
-    const slotMm = (state.job_track_slot_mm && typeof state.job_track_slot_mm === 'object') ? Number(state.job_track_slot_mm[active] || 0) : 0;
-    const jobMm = Number(state.current_job_filament_mm || 0);
-    const jobG = Number(state.current_job_filament_g || 0);
-    const ratio = (jobMm > 0 && jobG > 0) ? (jobG / jobMm) : 0;
-
-    const slotM = slotMm > 0 ? (slotMm / 1000) : 0;
-
-    // Prefer backend-provided per-slot grams (robust for multi-color and firmware quirks)
-    const slotG_direct = (state.job_track_slot_g && typeof state.job_track_slot_g === 'object') ? Number(state.job_track_slot_g[active] || 0) : 0;
-    const slotG = (slotG_direct > 0) ? slotG_direct : ((ratio > 0 && slotMm > 0) ? (slotMm * ratio) : 0);
-
-    if (activeLive && isPrinting && slotMm > 0) {
-      const p1 = document.createElement('span');
-      p1.className = 'pill';
-      p1.textContent = `Live: ${slotM.toFixed(slotM < 10 ? 2 : 1)} m`;
-      activeLive.appendChild(p1);
-      if (slotG > 0) {
-        const p2 = document.createElement('span');
-        p2.className = 'pill';
-        p2.textContent = `≈ ${slotG.toFixed(1)} g`;
-        activeLive.appendChild(p2);
-      }
-      activeLive.style.display = 'flex';
-    }
   } else {
     $("activeMeta").textContent = "—";
   }
@@ -833,18 +583,11 @@ function render(state) {
 
 async function tick() {
   try {
-    // Preserve open accordions / select values so assignment doesn't collapse
-    // during auto-refresh.
-    captureUiState();
-    const rightCol = document.querySelector('.rightCol');
-    const scrollTop = rightCol ? rightCol.scrollTop : null;
     const r = await fetch("/api/ui/state", { cache: "no-store" });
     const j = await r.json();
     const st = j.result || j;
     spoolmanConfigured = !!st.spoolman_configured;
     render(st);
-    restoreUiState();
-    if (rightCol && scrollTop != null) rightCol.scrollTop = scrollTop;
   } catch (e) {
     badge($("printerBadge"), t('badge.printer_dash'), "warn");
     badge($("cfsBadge"), t('badge.cfs_off'), "warn");

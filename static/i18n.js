@@ -14,7 +14,6 @@ const I18N = {
     // Section titles
     'section.active':           'Aktiv',
     'section.spoolman_status':  'Spoolman Status',
-    'section.moon_summary':     'Moonraker-History (gesamt)',
 
     // Refresh control
     'refresh.title':         'Update-Intervall',
@@ -27,9 +26,8 @@ const I18N = {
     'modal.btn_rollchange':  'Rollwechsel',
     'modal.hint':            'Hinweis: Das speichert nur lokal in dieser App (kein POST an den Drucker). Rollwechsel trennt die Spoolman-Verknüpfung.',
 
-    // Moonraker history
-    'moon.empty':            'Keine Moonraker-History Daten',
-    'moon.no_consumption':   'Kein Verbrauch in History gefunden',
+    // Slot percent badge
+    'slot.percent':          'Restmenge',
 
     // Spoolman status panel
     'spoolman.remaining':         'Restgewicht',
@@ -41,18 +39,6 @@ const I18N = {
     'spoolman.loading_spool':     'Lade Spool-Daten …',
     'spoolman.unavailable':       'Spoolman nicht erreichbar',
 
-    // Assignment
-    'assign.title_existing': 'Zuordnung (lokal gespeichert)',
-    'assign.title_new':      'Zu Slot zuordnen (lokal)',
-    'assign.btn_edit':       'Ändern',
-    'assign.select_default': '— Slot wählen —',
-    'assign.total':          'gesamt',
-    'assign.btn_update':     'Zuordnung aktualisieren',
-    'assign.btn_assign':     'Zuordnen',
-    'assign.alert_select':   'Bitte mindestens einen Slot wählen.',
-    'assign.error_save':     'Konnte nicht speichern: ',
-    'assign.current':        'Aktuell: ',
-
     // Badges
     'badge.printer_ok':      'Printer: verbunden',
     'badge.printer_off':     'Printer: getrennt',
@@ -61,7 +47,7 @@ const I18N = {
     'badge.cfs_off':         'CFS: —',
 
     // Footer
-    'footer.tip':            'Tip: Wenn Farben/Material nicht angezeigt werden, prüfe in <code>data/config.json</code> die <code>moonraker_url</code>.',
+    'footer.tip':            'Tip: Wenn Farben/Material nicht angezeigt werden, setze in <code>data/config.json</code> die <code>printer_url</code> auf die IP des Druckers.',
 
     // Spoolman
     'spoolman.section':      'Spoolman',
@@ -95,7 +81,6 @@ const I18N = {
     // Section titles
     'section.active':           'Active',
     'section.spoolman_status':  'Spoolman Status',
-    'section.moon_summary':     'Moonraker History (total)',
 
     // Refresh control
     'refresh.title':         'Refresh interval',
@@ -108,9 +93,8 @@ const I18N = {
     'modal.btn_rollchange':  'Roll change',
     'modal.hint':            'Note: This saves locally in this app only (no POST to printer). Roll change unlinks the Spoolman spool.',
 
-    // Moonraker history
-    'moon.empty':            'No Moonraker history data',
-    'moon.no_consumption':   'No consumption found in history',
+    // Slot percent badge
+    'slot.percent':          'Remaining',
 
     // Spoolman status panel
     'spoolman.remaining':         'Remaining weight',
@@ -122,18 +106,6 @@ const I18N = {
     'spoolman.loading_spool':     'Loading spool data…',
     'spoolman.unavailable':       'Spoolman unreachable',
 
-    // Assignment
-    'assign.title_existing': 'Assignment (saved locally)',
-    'assign.title_new':      'Assign to slot (local)',
-    'assign.btn_edit':       'Edit',
-    'assign.select_default': '— Pick slot —',
-    'assign.total':          'total',
-    'assign.btn_update':     'Update assignment',
-    'assign.btn_assign':     'Assign',
-    'assign.alert_select':   'Please select at least one slot.',
-    'assign.error_save':     'Could not save: ',
-    'assign.current':        'Current: ',
-
     // Badges
     'badge.printer_ok':      'Printer: connected',
     'badge.printer_off':     'Printer: disconnected',
@@ -142,7 +114,7 @@ const I18N = {
     'badge.cfs_off':         'CFS: —',
 
     // Footer
-    'footer.tip':            'Tip: If colors/material are not shown, check <code>moonraker_url</code> in <code>data/config.json</code>.',
+    'footer.tip':            'Tip: If colors/material are not shown, set <code>printer_url</code> to your printer\'s IP in <code>data/config.json</code>.',
 
     // Spoolman
     'spoolman.section':      'Spoolman',
