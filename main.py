@@ -376,6 +376,56 @@ def _spoolman_report_measure(spool_id: int, weight_g: float) -> None:
         print(f"[SPOOLMAN] measure report failed for spool {spool_id}: {e}")
 
 
+def _spoolman_set_extra(spool_id: int, key: str, value: str) -> None:
+    """PATCH Spoolman spool to write a single extra field. Fire-and-forget."""
+    base = _spoolman_base_url()
+    if not base or not spool_id:
+        return
+    try:
+        url = f"{base}/api/v1/spool/{spool_id}"
+        data = json.dumps({"extra": {key: value}}).encode("utf-8")
+        req = UrlRequest(url, data=data, headers={
+            "User-Agent": "filament-manager/1.0",
+            "Content-Type": "application/json",
+        }, method="PATCH")
+        with urlopen(req, timeout=3.0) as r:
+            r.read()
+        print(f"[SPOOLMAN] set extra {key}={value!r} on spool {spool_id}")
+    except Exception as e:
+        print(f"[SPOOLMAN] set extra failed for spool {spool_id}: {e}")
+
+
+def _spoolman_autolink_by_rfid(slot: str, rfid: str, st) -> None:
+    """Search active Spoolman spools for one with extra.cfs_rfid == rfid and auto-link."""
+    global _ws_last_rfid
+    base = _spoolman_base_url()
+    if not base or not rfid:
+        return
+    try:
+        spools = _http_get_json(f"{base}/api/v1/spool?allow_archived=false", timeout=5.0)
+        if not isinstance(spools, list):
+            return
+        for sp in spools:
+            extra = sp.get("extra") or {}
+            if extra.get("cfs_rfid") != rfid:
+                continue
+            spool_id = sp.get("id")
+            if not spool_id:
+                continue
+            slot_state = st.slots.get(slot)
+            if slot_state is None:
+                return
+            slot_state.spoolman_id = spool_id
+            st.slots[slot] = slot_state
+            # Record RFID as seen so we don't re-trigger next cycle
+            _ws_last_rfid[slot] = rfid
+            save_state(st)
+            print(f"[SPOOLMAN] Auto-linked slot {slot} → spool {spool_id} via RFID {rfid!r}")
+            return
+    except Exception as e:
+        print(f"[SPOOLMAN] auto-link lookup failed for slot {slot}: {e}")
+
+
 def _color_distance(hex1: str, hex2: str) -> float:
     """Simple Euclidean RGB distance between two hex colors."""
     try:
@@ -390,6 +440,7 @@ def _color_distance(hex1: str, hex2: str) -> float:
 
 _WS_SAVE_INTERVAL = 10.0
 _ws_last_save: float = 0.0
+_ws_last_rfid: Dict[str, str] = {}  # slot → last seen RFID code
 
 _VALID_SLOT_IDS = frozenset(
     f"{b}{l}" for b in "1234" for l in "ABCD"
@@ -488,6 +539,16 @@ def _parse_ws_cfs_data(payload: dict) -> None:
                 if vendor:
                     slot_obj.manufacturer = vendor
                 st.slots[slot] = slot_obj
+
+            # RFID-based auto-link: if a new RFID appears on an unlinked slot, search Spoolman
+            rfid = mat.get("rfid", "")
+            if rfid and state_val == 2:  # state 2 = RFID-tagged spool
+                prev_rfid = _ws_last_rfid.get(slot, "")
+                if rfid != prev_rfid:
+                    _ws_last_rfid[slot] = rfid
+                    slot_obj2 = st.slots.get(slot)
+                    if slot_obj2 and not getattr(slot_obj2, "spoolman_id", None):
+                        _spoolman_autolink_by_rfid(slot, rfid, st)
 
             # Spoolman delta: report length used since last snapshot
             cur_m = float(mat.get("usedMaterialLength") or 0)
@@ -779,6 +840,8 @@ def api_ui_spool_set_start(req: UiSpoolSetStartRequest) -> ApiResponse:
     state.slots[slot] = s
     # Reset WS length baseline so next snapshot doesn't trigger a false delta
     state.ws_slot_length_m.pop(slot, None)
+    # Clear RFID cache so re-inserting any spool triggers auto-link again
+    _ws_last_rfid.pop(slot, None)
     save_state(state)
     return ApiResponse(result=_ui_state_dict(state))
 
@@ -874,6 +937,13 @@ def api_ui_spoolman_link(req: SpoolmanLinkRequest) -> ApiResponse:
 
     state.slots[slot] = s
     save_state(state)
+
+    # Write the slot's CFS RFID to the Spoolman spool's extra field for future auto-linking
+    rfid = (state.cfs_slots.get(slot) or {}).get("rfid", "")
+    if rfid:
+        _spoolman_set_extra(req.spoolman_id, "cfs_rfid", rfid)
+        _ws_last_rfid[slot] = rfid  # mark as seen so auto-link doesn't re-trigger this cycle
+
     return ApiResponse(result=_ui_state_dict(state))
 
 
