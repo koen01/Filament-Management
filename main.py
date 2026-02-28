@@ -575,10 +575,10 @@ def _parse_ws_cfs_data(payload: dict) -> None:
     if boxes_meta:
         st.cfs_slots["_boxes"] = boxes_meta
 
-    if active_slot:
-        st.cfs_active_slot = active_slot
-        if active_slot in st.slots:
-            st.active_slot = active_slot
+    # Always update active slot — clears stale value when printer is idle
+    st.cfs_active_slot = active_slot
+    if active_slot and active_slot in st.slots:
+        st.active_slot = active_slot
 
     st.cfs_connected = True
     st.cfs_last_update = _now()
