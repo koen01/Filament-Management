@@ -41,11 +41,28 @@ function slotEl(slotId, label, meta, isActive) {
 
   const sub = document.createElement("div");
   sub.className = "slotSub";
-  const parts = [];
-  if (meta.material) parts.push(meta.material);
-  if (meta.color) parts.push(meta.color.toUpperCase());
-  sub.textContent = parts.length ? parts.join(" · ") : "—";
+  // Line 2: brand + filament name if available, else material + color
+  const brandName = [meta.manufacturer, meta.name].filter(Boolean).join(' ');
+  if (brandName) {
+    sub.textContent = brandName;
+  } else {
+    const parts = [];
+    if (meta.material) parts.push(meta.material);
+    if (meta.color) parts.push(meta.color.toUpperCase());
+    sub.textContent = parts.length ? parts.join(" · ") : "—";
+  }
   txt.appendChild(sub);
+
+  // Line 3: material type + Spoolman link indicator (only shown when line 2 has brand/name info)
+  const detailParts = [];
+  if (brandName && meta.material) detailParts.push(meta.material);
+  if (meta.spoolman_id) detailParts.push('SP #' + meta.spoolman_id);
+  if (detailParts.length) {
+    const detail = document.createElement("div");
+    detail.className = "slotDetail";
+    detail.textContent = detailParts.join(' · ');
+    txt.appendChild(detail);
+  }
 
   left.appendChild(txt);
 

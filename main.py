@@ -527,7 +527,7 @@ def _parse_ws_cfs_data(payload: dict) -> None:
 
 async def _ws_connect_and_run(ws_url: str) -> None:
     """Open one WebSocket connection to the printer and run the polling loop."""
-    async with websockets.connect(ws_url) as ws:
+    async with websockets.connect(ws_url, ping_interval=None, ping_timeout=None) as ws:
         # The printer pushes an unsolicited status JSON immediately on connect.
         # Drain those initial messages before initiating the heartbeat handshake.
         while True:
