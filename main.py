@@ -25,14 +25,10 @@ from models.schemas import (
     SelectSlotRequest,
     SetAutoRequest,
     SlotState,
-    SpoolApplyUsageRequest,
     SpoolmanLinkRequest,
     SpoolmanUnlinkRequest,
-    SpoolResetRequest,
     UiSetColorRequest,
-    UiSpoolSetRemainingRequest,
     UiSpoolSetStartRequest,
-    UiSlotResetRequest,
     UiSlotUpdateRequest,
     UpdateSlotRequest,
 )
@@ -148,10 +144,6 @@ def _ensure_data_files() -> None:
             "current_job": "",
             "current_job_filament_mm": 0,
             "current_job_filament_g": 0.0,
-            "last_accounted_job_mm": 0,
-            "last_accounted_slot": None,
-            # per-slot usage history (newest first)
-            "slot_history": {},
             # in-flight job attribution (persisted so a restart doesn't lose the active print)
             "job_track_name": "",
             "job_track_started_at": 0.0,
@@ -161,7 +153,7 @@ def _ensure_data_files() -> None:
             "job_track_last_state": "",
             # snapshot from Moonraker history (global list)
             "moonraker_history": [],
-            # local manual allocations for Moonraker history -> slots
+            # idempotency markers for Moonraker history -> Spoolman sync
             "moonraker_allocations": {},
             "updated_at": _now(),
         }
@@ -217,8 +209,6 @@ def _migrate_state_dict(data: dict) -> dict:
     data.setdefault("current_job", data.get("job", {}).get("name", ""))
     data.setdefault("current_job_filament_mm", int(data.get("job", {}).get("used_mm", 0) or 0))
     data.setdefault("current_job_filament_g", float(data.get("job", {}).get("used_g", 0.0) or 0.0))
-    data.setdefault("last_accounted_job_mm", int(data.get("last_accounted_job_mm", 0) or 0))
-    data.setdefault("last_accounted_slot", data.get("last_accounted_slot"))
 
     # Slots: allow keys like "2A": {material,color,...} without slot field
     slots = data.get("slots", {}) or {}
@@ -237,12 +227,6 @@ def _migrate_state_dict(data: dict) -> dict:
             mat = sd.get("material")
             if isinstance(mat, str) and mat.strip() in ("", "-", "—", "–"):
                 sd["material"] = "OTHER"
-            # allow 'remaining_g' as int
-            if "remaining_g" in sd and sd["remaining_g"] is not None:
-                try:
-                    sd["remaining_g"] = float(sd["remaining_g"])
-                except Exception:
-                    sd["remaining_g"] = None
             # Spoolman integration (optional)
             sd.setdefault("spoolman_id", None)
             slots[slot_id] = sd
@@ -260,8 +244,6 @@ def _migrate_state_dict(data: dict) -> dict:
                     "color_hex": "#00aaff",
                     "name": "",
                     "manufacturer": "",
-                    "remaining_g": 0.0,
-                    "notes": "",
                 }
         data["slots"] = slots
 
@@ -274,8 +256,6 @@ def _migrate_state_dict(data: dict) -> dict:
     data.setdefault("cfs_slots", {})
     data.setdefault("cfs_raw", {})
 
-    # --- history defaults ---
-    data.setdefault("slot_history", {})
     data.setdefault("job_track_name", "")
     data.setdefault("job_track_started_at", 0.0)
     data.setdefault("job_track_last_mm", 0)
@@ -346,96 +326,6 @@ def mm_to_g(material: str, mm: float) -> float:
     g = density * area_cm2 * length_cm
     return float(max(0.0, g))
 
-
-def _apply_job_usage(state: AppState, job_name: str, total_used_mm: int, slot_override: Optional[str] = None) -> None:
-    """Update job counters.
-
-    Note: We intentionally do NOT decrement remaining_g here anymore.
-    Creality K2's CFS can change slots mid-print (multi-color). Accurate
-    remaining deduction is handled by the per-slot tracker finalized at
-    print end.
-    """
-    total_used_mm = int(max(0, total_used_mm))
-
-    # Decide which slot to account against
-    slot_id = slot_override or state.last_accounted_slot or state.active_slot
-
-    # If job name changed, reset delta baseline
-    if job_name != (state.current_job or ""):
-        state.last_accounted_job_mm = 0
-
-    delta_mm = max(0, total_used_mm - int(state.last_accounted_job_mm or 0))
-
-    material = state.slots[slot_id].material
-
-    # Update state
-    state.current_job = job_name
-    state.current_job_filament_mm = total_used_mm
-    state.current_job_filament_g = mm_to_g(material, float(total_used_mm))
-    state.last_accounted_job_mm = total_used_mm
-    state.last_accounted_slot = slot_id
-
-
-def _hist_push(state: AppState, slot_id: str, entry: dict, keep: int = 50) -> None:
-    """Append a history entry for a slot (newest first)."""
-    try:
-        # Tag entries with the current spool epoch so UI can hide old-roll prints
-        try:
-            entry.setdefault("epoch", int(getattr(state.slots.get(slot_id), "spool_epoch", 0) or 0))
-        except Exception:
-            entry.setdefault("epoch", 0)
-        h = state.slot_history.get(slot_id)
-        if not isinstance(h, list):
-            h = []
-        h.insert(0, entry)
-        state.slot_history[slot_id] = h[:keep]
-    except Exception:
-        # never fail the poll loop due to history
-        pass
-
-
-def _hist_upsert_by_src(state: AppState, slot_id: str, src: str, entry: dict, keep: int = 50) -> None:
-    """Insert or replace a history entry identified by a stable _src marker.
-
-    Used to show a "live" (in-progress) entry per slot during printing without
-    spamming the history list.
-    """
-    try:
-        if not src:
-            _hist_push(state, slot_id, entry, keep=keep)
-            return
-
-        entry["_src"] = src
-
-        # Tag entries with the current spool epoch so UI can hide old-roll prints
-        try:
-            entry.setdefault("epoch", int(getattr(state.slots.get(slot_id), "spool_epoch", 0) or 0))
-        except Exception:
-            entry.setdefault("epoch", 0)
-
-        h = state.slot_history.get(slot_id)
-        if not isinstance(h, list):
-            h = []
-
-        # Drop existing entries with same source marker
-        h = [e for e in h if not (isinstance(e, dict) and e.get("_src") == src)]
-        h.insert(0, entry)
-        state.slot_history[slot_id] = h[:keep]
-    except Exception:
-        # never fail the poll loop due to history
-        pass
-
-
-def _inc_slot_epoch_consumed(state: AppState, slot_id: str, delta_g: float) -> None:
-    """Increment the running consumed-total for the current spool epoch."""
-    try:
-        s = state.slots.get(slot_id)
-        if not s:
-            return
-        s.spool_epoch_consumed_g_total = float(getattr(s, "spool_epoch_consumed_g_total", 0.0) or 0.0) + float(delta_g)
-        state.slots[slot_id] = s
-    except Exception:
-        return
 
 
 # --- Minimal Moonraker polling (optional) ---
@@ -937,10 +827,9 @@ async def moonraker_poll_loop() -> None:
             else:
                 st.cfs_connected = False
 
-            # --- Per-slot history tracking (read-only) ---
-            # Attribute delta filament_used(mm) to the currently active slot during a print.
-            # This enables per-slot history (and later accurate remaining_g calculations) even
-            # for multi-color prints.
+            # --- Per-slot filament tracking ---
+            # Attribute delta filament_used(mm) to the active slot during a print.
+            # Accumulated grams per slot are reported to Spoolman at print finalize.
             try:
                 is_printing = ps_state in ("printing", "paused")
                 tracking = bool(st.job_track_name)
@@ -970,92 +859,21 @@ async def moonraker_poll_loop() -> None:
                             g_delta = 0.0
                         if g_delta > 0:
                             st.job_track_slot_g[curr_slot] = float(st.job_track_slot_g.get(curr_slot, 0.0)) + float(g_delta)
-
-                            # Live spool deduction: increment epoch-consumed total immediately
-                            _inc_slot_epoch_consumed(st, curr_slot, float(g_delta))
                     st.job_track_last_mm = int(used_mm)
                     st.job_track_last_state = ps_state
 
-                    # Publish a single "live" history entry per slot for the current job.
-                    # This makes the right-hand "Historie pro Slot" useful during
-                    # multi-color prints (usage is attributed while printing, not only at the end).
-                    try:
-                        now_ts = _now()
-                        slot_mm_live = st.job_track_slot_mm if isinstance(st.job_track_slot_mm, dict) else {}
-                        for sid, mm_live in slot_mm_live.items():
-                            try:
-                                mm_i = int(mm_live or 0)
-                                if mm_i <= 0:
-                                    continue
-                                mat = st.slots.get(sid).material if sid in st.slots else "OTHER"
-                                g_live = float(round(mm_to_g(str(mat), float(mm_i)), 2))
-                                src = f"live:{st.job_track_started_at}:{st.job_track_name}:{sid}"
-                                _hist_upsert_by_src(
-                                    st,
-                                    sid,
-                                    src,
-                                    {
-                                        "ts": float(now_ts),
-                                        "job": st.job_track_name,
-                                        "used_mm": mm_i,
-                                        "used_g": g_live,
-                                        "result": "printing",
-                                    },
-                                )
-                            except Exception:
-                                continue
-                    except Exception:
-                        pass
-
                 # Finalize when printing ends (complete/cancel/error/standby)
                 if (not is_printing) and tracking and st.job_track_name:
-                    # Determine an end timestamp from Creality virtual_sdcard if available
-                    end_ts = _now()
-                    try:
-                        cpd = (vsd.get("cur_print_data") or {})
-                        et = cpd.get("end_time")
-                        if et is not None:
-                            end_ts = float(et)
-                    except Exception:
-                        pass
-
-                    # Create history entries per slot (only if we have consumption)
-                    slot_mm = st.job_track_slot_mm if isinstance(st.job_track_slot_mm, dict) else {}
-                    for sid, mm in slot_mm.items():
+                    # Report per-slot consumption to Spoolman
+                    slot_g = st.job_track_slot_g if isinstance(st.job_track_slot_g, dict) else {}
+                    for sid, g in slot_g.items():
                         try:
-                            mm_i = int(mm)
-                            if mm_i <= 0:
+                            gv = float(g)
+                            if gv <= 0:
                                 continue
-                            mat = st.slots.get(sid).material if sid in st.slots else "OTHER"
-                            g = float(round(mm_to_g(str(mat), float(mm_i)), 2))
-
-                            # Remove any live entry for this job/slot (so we don't show duplicates)
-                            try:
-                                live_src = f"live:{st.job_track_started_at}:{st.job_track_name}:{sid}"
-                                h0 = st.slot_history.get(sid)
-                                if isinstance(h0, list):
-                                    st.slot_history[sid] = [e for e in h0 if not (isinstance(e, dict) and e.get("_src") == live_src)]
-                            except Exception:
-                                pass
-
-                            _hist_push(
-                                st,
-                                sid,
-                                {
-                                    "ts": float(end_ts),
-                                    "job": st.job_track_name,
-                                    "used_mm": mm_i,
-                                    "used_g": g,
-                                    "result": ps_state,
-                                },
-                            )
-                            # Sync consumption to Spoolman if linked
-                            try:
-                                slot_obj = st.slots.get(sid)
-                                if slot_obj and getattr(slot_obj, "spoolman_id", None) and g > 0:
-                                    _spoolman_report_usage(slot_obj.spoolman_id, g)
-                            except Exception:
-                                pass
+                            slot_obj = st.slots.get(sid)
+                            if slot_obj and getattr(slot_obj, "spoolman_id", None):
+                                _spoolman_report_usage(slot_obj.spoolman_id, gv)
                         except Exception:
                             continue
 
@@ -1071,9 +889,16 @@ async def moonraker_poll_loop() -> None:
 
             # --- Job usage accounting ---
             if filename or used_mm:
-                _apply_job_usage(st, filename or st.current_job or "", used_mm)
+                st.current_job = filename or st.current_job or ""
+                st.current_job_filament_mm = int(max(0, used_mm))
                 if used_g > 0.0:
                     st.current_job_filament_g = float(round(used_g, 2))
+                else:
+                    try:
+                        mat = (st.slots.get(st.active_slot) or SlotState(slot=st.active_slot)).material
+                    except Exception:
+                        mat = "OTHER"
+                    st.current_job_filament_g = mm_to_g(mat, float(max(0, used_mm)))
 
             # --- Moonraker history snapshot (global) ---
             # This is useful to show past jobs even if our per-slot tracker
@@ -1145,12 +970,17 @@ def api_state():
 
 @app.post("/api/moonraker/allocate", response_model=AppState)
 def api_moonraker_allocate(req: MoonrakerAllocateRequest):
-    """Store local per-slot allocation for a Moonraker history job.
+    """Store local per-slot allocation for a Moonraker history job and sync to Spoolman.
 
-    This never talks to the printer. It only enriches our local per-slot history.
+    Idempotent: if the same key was already allocated, returns early to prevent
+    double-syncing to Spoolman.
     """
     st = load_state()
     key = (req.job_key or "").strip() or _job_key(req.job_key, req.ts, req.job)
+
+    # Idempotency guard: don't double-sync to Spoolman
+    if key in st.moonraker_allocations:
+        return st
 
     # Normalize alloc_g: drop zeros/negatives
     alloc: Dict[str, float] = {}
@@ -1165,56 +995,11 @@ def api_moonraker_allocate(req: MoonrakerAllocateRequest):
     if not alloc:
         raise HTTPException(status_code=400, detail="alloc_g must contain at least one positive value")
 
-    # Persist allocation
-    st.moonraker_allocations[key] = {"job": req.job, "ts": float(req.ts), "alloc_g": alloc}
+    # Persist allocation marker (no alloc_g stored — Spoolman owns the running total)
+    st.moonraker_allocations[key] = {"job": req.job, "ts": float(req.ts)}
 
-    # Push entries into per-slot history (and replace previous pushes for this key)
-    # We keep a marker so we can de-duplicate.
-    marker = f"moonraker:{key}"
-    for sid in alloc.keys():
-        h = st.slot_history.get(sid)
-        if isinstance(h, list):
-            # Remove previous entries for this marker and adjust epoch totals accordingly.
-            new_h = []
-            removed_g = 0.0
-            for e in h:
-                if isinstance(e, dict) and e.get("_src") == marker:
-                    try:
-                        removed_g += float(e.get("used_g") or 0.0)
-                    except Exception:
-                        pass
-                    continue
-                new_h.append(e)
-            st.slot_history[sid] = new_h
-            if removed_g > 0:
-                try:
-                    s = st.slots.get(sid)
-                    if s:
-                        # Only subtract from current epoch total if the marker entries
-                        # were added in the current epoch.
-                        # (Older epochs should not affect current totals.)
-                        # We approximate by checking the current slot epoch matches the
-                        # epoch on the first removed entry if available.
-                        s.spool_epoch_consumed_g_total = max(0.0, float(getattr(s, "spool_epoch_consumed_g_total", 0.0) or 0.0) - float(removed_g))
-                        st.slots[sid] = s
-                except Exception:
-                    pass
-
+    # Sync consumption to Spoolman per slot
     for sid, g in alloc.items():
-        _hist_push(
-            st,
-            sid,
-            {
-                "ts": float(req.ts),
-                "job": req.job,
-                "used_mm": 0,
-                "used_g": float(round(float(g), 2)),
-                "result": "history",
-                "_src": marker,
-            },
-        )
-        _inc_slot_epoch_consumed(st, sid, float(g))
-        # Sync consumption to Spoolman if linked
         try:
             slot_obj = st.slots.get(sid)
             if slot_obj and getattr(slot_obj, "spoolman_id", None) and float(g) > 0:
@@ -1240,25 +1025,6 @@ def _ui_state_dict(state: AppState) -> dict:
         if "manufacturer" in out and "vendor" not in out:
             out["vendor"] = out.get("manufacturer", "")
 
-        # Derived spool metrics (purely local)
-        # - spool_consumed_g: running total for current epoch (stable even if UI history is trimmed)
-        # - spool_used_g: consumption since the last "Übernehmen" reference
-        # - spool_remaining_g: computed remaining weight
-        try:
-            consumed = float(out.get("spool_epoch_consumed_g_total") or 0.0)
-            out["spool_consumed_g"] = round(consumed, 2)
-
-            ref_rem = out.get("spool_ref_remaining_g")
-            ref_cons = out.get("spool_ref_consumed_g")
-            if ref_rem is not None and ref_cons is not None:
-                # Remaining decreases only by consumption since reference point
-                since = max(0.0, consumed - float(ref_cons))
-                remaining = max(0.0, float(ref_rem) - since)
-                out["spool_remaining_g"] = round(remaining, 1)
-                out["spool_used_g"] = round(since, 1)
-        except Exception:
-            pass
-
         slots_out[slot_id] = out
     d["slots"] = slots_out
 
@@ -1280,14 +1046,6 @@ def _ui_state_dict(state: AppState) -> dict:
     d["spoolman_configured"] = bool(_spoolman_base_url())
 
     return d
-
-
-def _slot_consumed_g_epoch(state: AppState, slot: str) -> float:
-    try:
-        s = state.slots.get(slot)
-        return float(getattr(s, "spool_epoch_consumed_g_total", 0.0) or 0.0)
-    except Exception:
-        return 0.0
 
 
 # --- UI API (static frontend uses /api/ui/* and expects {"result": ...}) ---
@@ -1341,7 +1099,8 @@ def api_update_slot(slot: str, req: UpdateSlotRequest):
     s = state.slots[slot]
     update = _req_dump(req, exclude_unset=True)
     for k, v in update.items():
-        setattr(s, k, v)
+        if hasattr(s, k):
+            setattr(s, k, v)
 
     state.slots[slot] = s
     save_state(state)
@@ -1379,83 +1138,27 @@ def api_ui_slot_update(req: UiSlotUpdateRequest) -> ApiResponse:
     return ApiResponse(result=_ui_state_dict(state))
 
 
-@app.post("/api/ui/slot/reset", response_model=ApiResponse)
-def api_ui_slot_reset(req: UiSlotResetRequest) -> ApiResponse:
-    state = load_state()
-    slot = req.slot
-    if slot not in state.slots:
-        raise HTTPException(status_code=404, detail="Unknown slot")
-    state.slots[slot].remaining_g = float(req.remaining_g)
-    save_state(state)
-    return ApiResponse(result=_ui_state_dict(state))
-
 
 @app.post("/api/ui/spool/set_start", response_model=ApiResponse)
 def api_ui_spool_set_start(req: UiSpoolSetStartRequest) -> ApiResponse:
-    """Roll change: set new spool baseline (local only).
-
-    Historical entries are kept, but hidden by incrementing the slot's spool_epoch.
-    The new spool's remaining weight is set as the reference point.
-    """
+    """Roll change: increment epoch and auto-unlink Spoolman spool."""
     state = load_state()
     slot = req.slot
     if slot not in state.slots:
         raise HTTPException(status_code=404, detail="Unknown slot")
 
-    start_g = float(req.start_g)
     s = state.slots[slot]
-    # New roll => new epoch
+    # New roll => new epoch (hides old history in Spoolman status, triggers auto-unlink)
     try:
         s.spool_epoch = int(getattr(s, "spool_epoch", 0) or 0) + 1
     except Exception:
         s.spool_epoch = 1
-
-    # Reset accounting for the new epoch
-    s.spool_epoch_consumed_g_total = 0.0
-    s.spool_ref_remaining_g = start_g
-    s.spool_ref_consumed_g = 0.0
-    s.spool_ref_set_at = time.time()
     # Roll change auto-unlinks Spoolman spool
     s.spoolman_id = None
-    # keep legacy fields for debugging only
-    s.spool_start_g = start_g
-    s.remaining_g = start_g
     state.slots[slot] = s
     save_state(state)
     return ApiResponse(result=_ui_state_dict(state))
 
-
-@app.post("/api/ui/spool/set_remaining", response_model=ApiResponse)
-def api_ui_spool_set_remaining(req: UiSpoolSetRemainingRequest) -> ApiResponse:
-    """Übernehmen: set measured remaining weight as new reference (local only).
-
-    Does NOT reset epoch and does not delete history. Remaining is computed as:
-      remaining = ref_remaining - (consumed_epoch - ref_consumed)
-    """
-    state = load_state()
-    slot = req.slot
-    if slot not in state.slots:
-        raise HTTPException(status_code=404, detail="Unknown slot")
-
-    rem_g = float(req.remaining_g)
-    s = state.slots[slot]
-    consumed_now = _slot_consumed_g_epoch(state, slot)
-    s.spool_ref_remaining_g = rem_g
-    s.spool_ref_consumed_g = float(round(consumed_now, 4))
-    s.spool_ref_set_at = time.time()
-    # legacy
-    s.remaining_g = rem_g
-    state.slots[slot] = s
-    save_state(state)
-
-    # Sync measured weight to Spoolman if linked
-    if getattr(s, "spoolman_id", None):
-        try:
-            _spoolman_report_measure(s.spoolman_id, rem_g)
-        except Exception:
-            pass
-
-    return ApiResponse(result=_ui_state_dict(state))
 
 
 # --- Spoolman integration endpoints ---
@@ -1527,8 +1230,6 @@ def api_ui_spoolman_link(req: SpoolmanLinkRequest) -> ApiResponse:
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Spoolman unreachable: {e}")
 
-    # Import remaining_weight from Spoolman
-    rem_g = float(sp.get("remaining_weight") or 0.0)
     filament = sp.get("filament") or {}
 
     s = state.slots[slot]
@@ -1548,13 +1249,6 @@ def api_ui_spoolman_link(req: SpoolmanLinkRequest) -> ApiResponse:
     if vendor_name:
         s.manufacturer = vendor_name
 
-    # Set remaining as reference (same logic as set_remaining)
-    consumed_now = _slot_consumed_g_epoch(state, slot)
-    s.spool_ref_remaining_g = rem_g
-    s.spool_ref_consumed_g = float(round(consumed_now, 4))
-    s.spool_ref_set_at = time.time()
-    s.remaining_g = rem_g
-
     state.slots[slot] = s
     save_state(state)
     return ApiResponse(result=_ui_state_dict(state))
@@ -1573,6 +1267,34 @@ def api_ui_spoolman_unlink(req: SpoolmanUnlinkRequest) -> ApiResponse:
     return ApiResponse(result=_ui_state_dict(state))
 
 
+@app.get("/api/ui/spoolman/spool_detail")
+def api_ui_spoolman_spool_detail(slot: str = "1A"):
+    """Proxy Spoolman spool status for a given CFS slot.
+
+    Returns {"linked": bool, "slot": str, "spool": dict|null, "error": str|null}.
+    Never raises HTTP 502 — Spoolman unavailability is returned as a structured error
+    so the frontend can degrade gracefully.
+    """
+    state = load_state()
+    slot_obj = state.slots.get(slot)
+    if slot_obj is None:
+        raise HTTPException(status_code=404, detail="Unknown slot")
+
+    spool_id = getattr(slot_obj, "spoolman_id", None)
+    if not spool_id:
+        return {"linked": False, "slot": slot, "spool": None, "error": None}
+
+    base = _spoolman_base_url()
+    if not base:
+        return {"linked": True, "slot": slot, "spool": None, "error": "not_configured"}
+
+    try:
+        sp = _spoolman_get_spool(base, spool_id)
+        return {"linked": True, "slot": slot, "spool": sp, "error": None}
+    except Exception as e:
+        return {"linked": True, "slot": slot, "spool": None, "error": "unreachable"}
+
+
 @app.post("/api/ui/set_color", response_model=ApiResponse)
 def api_ui_set_color(req: UiSetColorRequest) -> ApiResponse:
     state = load_state()
@@ -1583,31 +1305,6 @@ def api_ui_set_color(req: UiSetColorRequest) -> ApiResponse:
     return ApiResponse(result=_ui_state_dict(state))
 
 
-@app.post("/api/spool/reset", response_model=AppState)
-def api_spool_reset(req: SpoolResetRequest):
-    state = load_state()
-    if req.slot not in state.slots:
-        raise HTTPException(status_code=404, detail="Unknown slot")
-    state.slots[req.slot].remaining_g = float(req.remaining_g)
-    save_state(state)
-    return state
-
-
-@app.post("/api/spool/apply_usage", response_model=AppState)
-def api_spool_apply_usage(req: SpoolApplyUsageRequest):
-    state = load_state()
-    if req.slot not in state.slots:
-        raise HTTPException(status_code=404, detail="Unknown slot")
-
-    current = state.slots[req.slot].remaining_g
-    if current is None:
-        raise HTTPException(status_code=409, detail="remaining_g is not set for this slot")
-
-    new_val = max(0.0, float(current) - float(req.used_g))
-    state.slots[req.slot].remaining_g = new_val
-    save_state(state)
-    return state
-
 
 @app.post("/api/job/set", response_model=AppState)
 def api_job_set(req: JobSetRequest):
@@ -1615,8 +1312,6 @@ def api_job_set(req: JobSetRequest):
     state.current_job = req.name
     state.current_job_filament_mm = 0
     state.current_job_filament_g = 0.0
-    state.last_accounted_job_mm = 0
-    state.last_accounted_slot = state.active_slot
     save_state(state)
     return state
 
@@ -1630,7 +1325,14 @@ def api_ui_job_set(req: JobSetRequest) -> ApiResponse:
 @app.post("/api/job/update", response_model=AppState)
 def api_job_update(req: JobUpdateRequest):
     state = load_state()
-    _apply_job_usage(state, state.current_job or "", int(req.used_mm), slot_override=req.slot)
+    slot_id = req.slot or state.active_slot
+    total_mm = int(max(0, req.used_mm))
+    try:
+        mat = (state.slots.get(slot_id) or SlotState(slot=slot_id)).material
+    except Exception:
+        mat = "OTHER"
+    state.current_job_filament_mm = total_mm
+    state.current_job_filament_g = mm_to_g(mat, float(total_mm))
     save_state(state)
     return state
 
@@ -1701,12 +1403,11 @@ def default_state() -> AppState:
     """
     slots: Dict[str, SlotState] = {}
     for sid in DEFAULT_SLOTS:
-        slots[sid] = SlotState(slot=sid, material="OTHER", color_hex="#00aaff", remaining_g=0.0)
+        slots[sid] = SlotState(slot=sid, material="OTHER", color_hex="#00aaff")
 
     # Sensible demo defaults for Box 2 (matches the UI screenshot vibe)
     slots["2A"].material = "ABS"
     slots["2A"].color_hex = "#4b0082"  # indigo-ish
-    slots["2A"].remaining_g = 1000.0
 
     return AppState(
         active_slot="2A",

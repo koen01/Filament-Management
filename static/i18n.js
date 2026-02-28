@@ -12,10 +12,9 @@ const I18N = {
     'status.ready':          'bereit',
 
     // Section titles
-    'section.active':        'Aktiv',
-    'section.history':       'Historie pro Slot',
-    'section.history_last4': 'letzte 4',
-    'section.moon_summary':  'Moonraker-History (gesamt)',
+    'section.active':           'Aktiv',
+    'section.spoolman_status':  'Spoolman Status',
+    'section.moon_summary':     'Moonraker-History (gesamt)',
 
     // Refresh control
     'refresh.title':         'Update-Intervall',
@@ -23,27 +22,24 @@ const I18N = {
 
     // Spool modal
     'modal.close':           'Schließen',
-    'modal.weigh_label':     'Istgewicht (g)',
-    'modal.weigh_ph':        'z.B. 206',
-    'modal.btn_apply':       'Übernehmen',
     'modal.newroll_label':   'Neue Rolle (g)',
     'modal.newroll_ph':      'z.B. 1000',
     'modal.btn_rollchange':  'Rollwechsel',
-    'modal.hint':            'Hinweis: Das speichert nur lokal in dieser App (kein POST an den Drucker). Rollwechsel versteckt alte Drucke in der Slot-Historie (bleibt intern gespeichert).',
-
-    // Spool stats
-    'spool.stats_full':      'Rest (berechnet): {remaining} · verbraucht seit Übernahme: {used} · Gesamt (Slot): {total}',
-    'spool.stats_partial':   'Rest (aktuell): {remaining} · Tipp: "Istgewicht" eintragen und Übernehmen.',
-    'spool.stats_none':      'Noch kein Referenzwert. Trage "Istgewicht" ein und klicke Übernehmen.',
+    'modal.hint':            'Hinweis: Das speichert nur lokal in dieser App (kein POST an den Drucker). Rollwechsel trennt die Spoolman-Verknüpfung.',
 
     // Moonraker history
     'moon.empty':            'Keine Moonraker-History Daten',
     'moon.no_consumption':   'Kein Verbrauch in History gefunden',
 
-    // History
-    'history.no_name':       '(ohne name)',
-    'history.active_suffix': ' · aktiv',
-    'history.no_data':       'Noch keine Daten',
+    // Spoolman status panel
+    'spoolman.remaining':         'Restgewicht',
+    'spoolman.used_total':        'Verbraucht gesamt',
+    'spoolman.first_used':        'Erste Nutzung',
+    'spoolman.last_used':         'Letzte Nutzung',
+    'spoolman.not_configured':    'Spoolman nicht konfiguriert',
+    'spoolman.slot_not_linked':   'Kein Spool verknüpft',
+    'spoolman.loading_spool':     'Lade Spool-Daten …',
+    'spoolman.unavailable':       'Spoolman nicht erreichbar',
 
     // Assignment
     'assign.title_existing': 'Zuordnung (lokal gespeichert)',
@@ -97,10 +93,9 @@ const I18N = {
     'status.ready':          'ready',
 
     // Section titles
-    'section.active':        'Active',
-    'section.history':       'History per Slot',
-    'section.history_last4': 'last 4',
-    'section.moon_summary':  'Moonraker History (total)',
+    'section.active':           'Active',
+    'section.spoolman_status':  'Spoolman Status',
+    'section.moon_summary':     'Moonraker History (total)',
 
     // Refresh control
     'refresh.title':         'Refresh interval',
@@ -108,27 +103,24 @@ const I18N = {
 
     // Spool modal
     'modal.close':           'Close',
-    'modal.weigh_label':     'Current weight (g)',
-    'modal.weigh_ph':        'e.g. 206',
-    'modal.btn_apply':       'Apply',
     'modal.newroll_label':   'New roll (g)',
     'modal.newroll_ph':      'e.g. 1000',
     'modal.btn_rollchange':  'Roll change',
-    'modal.hint':            'Note: This saves locally in this app only (no POST to printer). Roll change hides old prints in slot history (kept internally).',
-
-    // Spool stats
-    'spool.stats_full':      'Remaining (calc): {remaining} · used since reference: {used} · Total (slot): {total}',
-    'spool.stats_partial':   'Remaining (current): {remaining} · Tip: enter "Current weight" and click Apply.',
-    'spool.stats_none':      'No reference yet. Enter "Current weight" and click Apply.',
+    'modal.hint':            'Note: This saves locally in this app only (no POST to printer). Roll change unlinks the Spoolman spool.',
 
     // Moonraker history
     'moon.empty':            'No Moonraker history data',
     'moon.no_consumption':   'No consumption found in history',
 
-    // History
-    'history.no_name':       '(unnamed)',
-    'history.active_suffix': ' · active',
-    'history.no_data':       'No data yet',
+    // Spoolman status panel
+    'spoolman.remaining':         'Remaining weight',
+    'spoolman.used_total':        'Total used',
+    'spoolman.first_used':        'First used',
+    'spoolman.last_used':         'Last used',
+    'spoolman.not_configured':    'Spoolman not configured',
+    'spoolman.slot_not_linked':   'No spool linked',
+    'spoolman.loading_spool':     'Loading spool data…',
+    'spoolman.unavailable':       'Spoolman unreachable',
 
     // Assignment
     'assign.title_existing': 'Assignment (saved locally)',

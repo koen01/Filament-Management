@@ -47,27 +47,6 @@ function slotEl(slotId, label, meta, isActive) {
   sub.textContent = parts.length ? parts.join(" · ") : "—";
   txt.appendChild(sub);
 
-  // Optional spool info (local, derived)
-  // We show Rest BIG. (verbrauchte/used is available in the history; keeping tiles clean.)
-  const rem = (meta.spool_remaining_g != null ? meta.spool_remaining_g : meta.remaining_g);
-  if (rem != null) {
-    const row = document.createElement('div');
-    row.className = 'spoolRow';
-
-    const rest = document.createElement('div');
-    rest.className = 'spoolRest';
-    rest.textContent = fmtG(rem);
-    row.appendChild(rest);
-
-    // warning styles based on remaining grams
-    const r = Number(rem);
-    if (Number.isFinite(r)) {
-      if (r <= 50) wrap.classList.add('spoolCrit');
-      else if (r <= 150) wrap.classList.add('spoolLow');
-    }
-
-    txt.appendChild(row);
-  }
   left.appendChild(txt);
 
   const right = document.createElement("div");
@@ -127,18 +106,12 @@ function jobKeyFromMoon(e) {
 // collapse while the user is interacting (e.g. assigning slots).
 const uiState = {
   moonOpenKeys: new Set(),
-  slotOpenKeys: new Set(),
   moonSelectValues: {},
 };
 
 function captureUiState() {
   uiState.moonOpenKeys = new Set(
     Array.from(document.querySelectorAll('#moonHistory details.moonEntry[open]'))
-      .map((d) => d.dataset.key)
-      .filter(Boolean)
-  );
-  uiState.slotOpenKeys = new Set(
-    Array.from(document.querySelectorAll('#slotHistory details.histEntry[open]'))
       .map((d) => d.dataset.key)
       .filter(Boolean)
   );
@@ -153,10 +126,6 @@ function restoreUiState() {
   for (const d of document.querySelectorAll('#moonHistory details.moonEntry')) {
     const k = d.dataset.key;
     if (k && uiState.moonOpenKeys && uiState.moonOpenKeys.has(k)) d.open = true;
-  }
-  for (const d of document.querySelectorAll('#slotHistory details.histEntry')) {
-    const k = d.dataset.key;
-    if (k && uiState.slotOpenKeys && uiState.slotOpenKeys.has(k)) d.open = true;
   }
   for (const sel of document.querySelectorAll('#moonHistory select.assignSel')) {
     const k = sel.dataset.selkey;
@@ -213,30 +182,12 @@ function openSpoolModal(slotId, meta) {
 
   const title = $('spoolTitle');
   const sub = $('spoolSub');
-  const st = $('spoolStats');
   if (title) title.textContent = `Box ${slotId[0]} · Slot ${slotId[1]}`;
   if (sub) sub.textContent = `${meta.material || '—'} · ${(meta.color || '').toUpperCase() || '—'}`;
 
-  const startEl = $('spoolStart');
-  const remEl = $('spoolRemain');
-  // Prefill: use computed remaining if available (rounded), otherwise legacy remaining_g
-  const prefRem = (meta.spool_remaining_g != null ? meta.spool_remaining_g : meta.remaining_g);
-  if (remEl) remEl.value = (prefRem != null ? String(Math.round(Number(prefRem))) : '');
   // New roll input stays empty by default
+  const startEl = $('spoolStart');
   if (startEl) startEl.value = '';
-
-  if (st) {
-    const remG = (meta.spool_remaining_g != null ? meta.spool_remaining_g : meta.remaining_g);
-    const usedG = meta.spool_used_g;
-    const totalG = meta.spool_consumed_g;
-    if (remG != null && usedG != null) {
-      st.textContent = t('spool.stats_full', {remaining: fmtG(remG), used: fmtG(usedG), total: fmtG(totalG != null ? totalG : 0)});
-    } else if (remG != null) {
-      st.textContent = t('spool.stats_partial', {remaining: fmtG(remG)});
-    } else {
-      st.textContent = t('spool.stats_none');
-    }
-  }
 
   // --- Spoolman section ---
   const smSec = $('spoolmanSection');
@@ -252,12 +203,37 @@ function openSpoolModal(slotId, meta) {
         if (badge) { badge.textContent = t('spoolman.linked'); badge.classList.remove('muted'); badge.classList.add('ok'); }
         if (notLinked) notLinked.style.display = 'none';
         if (linked) linked.style.display = 'flex';
-        if (info) info.textContent = t('spoolman.linked_info', {
-          id: String(smId),
-          vendor: meta.manufacturer || meta.vendor || '',
-          name: meta.name || '',
-          remaining: fmtG(meta.spool_remaining_g != null ? meta.spool_remaining_g : meta.remaining_g),
-        });
+        if (info) {
+          info.textContent = t('spoolman.loading_spool');
+          // Fetch live remaining from Spoolman
+          fetch(`/api/ui/spoolman/spool_detail?slot=${encodeURIComponent(slotId)}`, { cache: 'no-store' })
+            .then(r => r.json())
+            .then(data => {
+              if (data.spool && data.spool.remaining_weight != null) {
+                info.textContent = t('spoolman.linked_info', {
+                  id: String(smId),
+                  vendor: meta.manufacturer || meta.vendor || '',
+                  name: meta.name || '',
+                  remaining: fmtG(data.spool.remaining_weight),
+                });
+              } else {
+                info.textContent = t('spoolman.linked_info', {
+                  id: String(smId),
+                  vendor: meta.manufacturer || meta.vendor || '',
+                  name: meta.name || '',
+                  remaining: data.error ? t('spoolman.unavailable') : '—',
+                });
+              }
+            })
+            .catch(() => {
+              info.textContent = t('spoolman.linked_info', {
+                id: String(smId),
+                vendor: meta.manufacturer || meta.vendor || '',
+                name: meta.name || '',
+                remaining: t('spoolman.unavailable'),
+              });
+            });
+        }
       } else {
         if (badge) { badge.textContent = t('spoolman.not_linked'); badge.classList.add('muted'); badge.classList.remove('ok'); }
         if (notLinked) notLinked.style.display = 'flex';
@@ -348,31 +324,14 @@ function initSpoolModal() {
   });
 
   const saveStart = $('spoolSaveStart');
-  const saveRemain = $('spoolSaveRemain');
 
   if (saveStart) {
     saveStart.onclick = async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       if (!spoolSlotId) return;
-      const v = Number(($('spoolStart') || {}).value || 0);
-      if (!Number.isFinite(v) || v <= 0) return;
-      // Rollwechsel: new epoch + new reference
-      await postJson('/api/ui/spool/set_start', { slot: spoolSlotId, start_g: v });
-      closeSpoolModal();
-      await tick();
-    };
-  }
-
-  if (saveRemain) {
-    saveRemain.onclick = async (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (!spoolSlotId) return;
-      const v = Number(($('spoolRemain') || {}).value || 0);
-      if (!Number.isFinite(v) || v < 0) return;
-      // Übernehmen: set measured remaining as reference (no epoch reset)
-      await postJson('/api/ui/spool/set_remaining', { slot: spoolSlotId, remaining_g: v });
+      // Rollwechsel: new epoch + auto-unlink Spoolman
+      await postJson('/api/ui/spool/set_start', { slot: spoolSlotId });
       closeSpoolModal();
       await tick();
     };
@@ -413,19 +372,26 @@ function initSpoolModal() {
       ev.preventDefault();
       ev.stopPropagation();
       if (!spoolSlotId) return;
-      // Re-link to re-import remaining_weight from Spoolman
+      // Re-fetch spool detail from Spoolman
       const info = $('spoolmanInfo');
-      // Get spoolman_id from current state
       try {
-        const r = await fetch('/api/ui/state', { cache: 'no-store' });
-        const j = await r.json();
-        const st = j.result || j;
-        const slotData = (st.slots || {})[spoolSlotId] || {};
-        const smId = slotData.spoolman_id;
-        if (!smId) return;
-        await postJson('/api/ui/spoolman/link', { slot: spoolSlotId, spoolman_id: smId });
-        closeSpoolModal();
-        await tick();
+        if (info) info.textContent = t('spoolman.loading_spool');
+        const r = await fetch(`/api/ui/spoolman/spool_detail?slot=${encodeURIComponent(spoolSlotId)}`, { cache: 'no-store' });
+        const data = await r.json();
+        if (data.spool && data.spool.remaining_weight != null) {
+          const stateR = await fetch('/api/ui/state', { cache: 'no-store' });
+          const stateJ = await stateR.json();
+          const stateData = stateJ.result || stateJ;
+          const slotData = (stateData.slots || {})[spoolSlotId] || {};
+          if (info) info.textContent = t('spoolman.linked_info', {
+            id: String(data.spool.id || slotData.spoolman_id || ''),
+            vendor: slotData.manufacturer || slotData.vendor || '',
+            name: slotData.name || '',
+            remaining: fmtG(data.spool.remaining_weight),
+          });
+        } else {
+          if (info) info.textContent = data.error ? t('spoolman.unavailable') : '—';
+        }
       } catch (e) {
         if (info) info.textContent = t('spoolman.error', { msg: e.message || String(e) });
       }
@@ -608,14 +574,6 @@ function renderMoonHistory(state, connectedBoxes) {
       };
       actions.appendChild(btn);
 
-      if (existing && typeof existing === "object") {
-        const info = document.createElement("div");
-        info.className = "tag";
-        const parts = [];
-        for (const [sid, g] of Object.entries(existing)) parts.push(`${sid}: ${fmtG(g)}`);
-        info.textContent = t('assign.current') + parts.join(" · ");
-        actions.appendChild(info);
-      }
       assign.appendChild(actions);
     }
 
@@ -626,124 +584,89 @@ function renderMoonHistory(state, connectedBoxes) {
   }
 }
 
-function renderHistory(state, slots, connectedBoxes) {
+async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
   const wrap = $("slotHistory");
   if (!wrap) return;
-  wrap.innerHTML = "";
 
-  const history = state.slot_history || {};
-  const active = state.cfs_active_slot || state.active_slot || null;
+  const slot = activeSlot || state.active_slot || null;
 
-  const slotIds = buildSlotIds(connectedBoxes);
+  wrap.innerHTML = '';
+  const loading = document.createElement('div');
+  loading.className = 'tag muted';
+  loading.textContent = t('spoolman.loading_spool');
+  wrap.appendChild(loading);
 
-  const metaFor = (sid) => {
-    const m = (slots && slots[sid]) ? slots[sid] : {};
-    const local = (state.slots && state.slots[sid]) ? state.slots[sid] : {};
-    return {
-      present: (m.present ?? local.present ?? true),
-      material: ((m.material ?? local.material) || "").toString().toUpperCase(),
-      color: ((m.color ?? m.color_hex ?? local.color ?? local.color_hex) || "").toString().toLowerCase(),
-      remaining_g: (local.remaining_g ?? null),
-      spool_remaining_g: (local.spool_remaining_g ?? null),
-      spool_used_g: (local.spool_used_g ?? null),
-      spool_consumed_g: (local.spool_consumed_g ?? null),
-    };
-  };
+  if (!spoolmanConfigured) {
+    wrap.innerHTML = '';
+    const msg = document.createElement('div');
+    msg.className = 'tag muted';
+    msg.textContent = t('spoolman.not_configured');
+    wrap.appendChild(msg);
+    return;
+  }
 
-  for (const sid of slotIds) {
-    const m = metaFor(sid);
-    const epoch = Number(((state.slots || {})[sid] || {}).spool_epoch || 0);
-    const rawEntries = Array.isArray(history[sid]) ? history[sid] : [];
-    const entries = rawEntries.filter(e => Number((e || {}).epoch || 0) === epoch).slice(0,4);
+  if (!slot) {
+    wrap.innerHTML = '';
+    const msg = document.createElement('div');
+    msg.className = 'tag muted';
+    msg.textContent = t('spoolman.slot_not_linked');
+    wrap.appendChild(msg);
+    return;
+  }
 
-    const card = document.createElement("div");
-    card.className = "histSlot";
+  try {
+    const r = await fetch(`/api/ui/spoolman/spool_detail?slot=${encodeURIComponent(slot)}`, { cache: 'no-store' });
+    const data = await r.json();
+    wrap.innerHTML = '';
 
-    const head = document.createElement("div");
-    head.className = "histHead";
-
-    const title = document.createElement("div");
-    title.className = "histTitle";
-
-    const sw = document.createElement("div");
-    sw.className = "swatch";
-    sw.style.width = "22px";
-    sw.style.height = "22px";
-    sw.style.background = m.color || "#2a3442";
-    title.appendChild(sw);
-
-    const nm = document.createElement("div");
-    nm.className = "histSlotName";
-    nm.textContent = `Box ${sid[0]} · Slot ${sid[1]}` + (sid === active ? t('history.active_suffix') : "");
-    title.appendChild(nm);
-
-    head.appendChild(title);
-
-    // totals
-    let sumMm = 0;
-    let sumG = 0;
-    for (const e of entries) {
-      sumMm += Number(e.used_mm || 0);
-      sumG += Number(e.used_g || 0);
-    }
-    const meta = document.createElement("div");
-    meta.className = "histMeta";
-    // Primary: grams (this is what matters). Keep meters as detail in entry.
-    meta.textContent = entries.length ? `${fmtG(sumG)}` : "—";
-    head.appendChild(meta);
-    card.appendChild(head);
-
-    const list = document.createElement("div");
-    list.className = "histList";
-
-    if (!entries.length) {
-      const empty = document.createElement("div");
-      empty.className = "tag muted";
-      empty.textContent = t('history.no_data');
-      list.appendChild(empty);
-    } else {
-      for (const e of entries) {
-        const det = document.createElement("details");
-        det.className = "histEntry";
-        det.dataset.key = `${sid}:${String(e.ts || '')}:${String(e.job || '')}`;
-
-        const sum = document.createElement("summary");
-        const row = document.createElement("div");
-        row.className = "histRow";
-
-        const job = document.createElement("div");
-        job.className = "histJob";
-        job.textContent = (e.job || t('history.no_name'));
-
-        const nums = document.createElement("div");
-        nums.className = "histNums";
-        const mmTxt = Number(e.used_mm || 0) > 0 ? ` (${fmtMm(e.used_mm)})` : "";
-        nums.textContent = `${fmtG(e.used_g)}${mmTxt}`;
-
-        row.appendChild(job);
-        row.appendChild(nums);
-        sum.appendChild(row);
-        det.appendChild(sum);
-
-        const sub = document.createElement("div");
-        sub.className = "histSub";
-        const when = document.createElement("span");
-        when.textContent = "🕒 " + fmtTs(e.ts);
-        const res = document.createElement("span");
-        res.textContent = "✅ " + String(e.result || "");
-        const mat = document.createElement("span");
-        mat.textContent = "🧵 " + (m.material || "—") + (m.color ? " " + m.color.toUpperCase() : "");
-        sub.appendChild(when);
-        sub.appendChild(mat);
-        if (e.result) sub.appendChild(res);
-        det.appendChild(sub);
-
-        list.appendChild(det);
-      }
+    if (!data.linked) {
+      const msg = document.createElement('div');
+      msg.className = 'tag muted';
+      msg.textContent = t('spoolman.slot_not_linked');
+      wrap.appendChild(msg);
+      return;
     }
 
-    card.appendChild(list);
+    if (!data.spool) {
+      const msg = document.createElement('div');
+      msg.className = 'tag muted';
+      msg.textContent = t('spoolman.unavailable');
+      wrap.appendChild(msg);
+      return;
+    }
+
+    const sp = data.spool;
+    const card = document.createElement('div');
+    card.className = 'spoolStatusCard';
+
+    const rows = [
+      { label: t('spoolman.remaining'), value: sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '—' },
+      { label: t('spoolman.used_total'), value: sp.used_weight != null ? fmtG(sp.used_weight) : '—' },
+      { label: t('spoolman.first_used'), value: sp.first_used ? fmtTs(new Date(sp.first_used).getTime() / 1000) : '—' },
+      { label: t('spoolman.last_used'), value: sp.last_used ? fmtTs(new Date(sp.last_used).getTime() / 1000) : '—' },
+    ];
+
+    for (const row of rows) {
+      const div = document.createElement('div');
+      div.className = 'spoolStatRow';
+      const lbl = document.createElement('span');
+      lbl.className = 'spoolStatLabel';
+      lbl.textContent = row.label;
+      const val = document.createElement('span');
+      val.className = 'spoolStatValue';
+      val.textContent = row.value;
+      div.appendChild(lbl);
+      div.appendChild(val);
+      card.appendChild(div);
+    }
+
     wrap.appendChild(card);
+  } catch (e) {
+    wrap.innerHTML = '';
+    const msg = document.createElement('div');
+    msg.className = 'tag muted';
+    msg.textContent = t('spoolman.unavailable');
+    wrap.appendChild(msg);
   }
 }
 
@@ -795,14 +718,8 @@ function render(state) {
       material: ((m.material ?? local.material) || "").toString().toUpperCase(),
       color: ((m.color ?? m.color_hex ?? local.color ?? local.color_hex) || "").toString().toLowerCase(),
 
-      // spool fields (local bookkeeping)
-      remaining_g: (local.remaining_g ?? null),
-      spool_remaining_g: (local.spool_remaining_g ?? null),
-      spool_used_g: (local.spool_used_g ?? null),
-      spool_consumed_g: (local.spool_consumed_g ?? null),
+      // spool epoch (for roll-change tracking)
       spool_epoch: (local.spool_epoch ?? null),
-      spool_ref_remaining_g: (local.spool_ref_remaining_g ?? null),
-      spool_ref_consumed_g: (local.spool_ref_consumed_g ?? null),
 
       // Spoolman
       spoolman_id: (local.spoolman_id ?? null),
@@ -865,8 +782,8 @@ function render(state) {
     boxesGrid.appendChild(makeBoxCard(b));
   }
 
-  // Right-side history panel
-  renderHistory(state, slots, connectedBoxes);
+  // Right-side Spoolman status panel
+  fetchAndRenderSpoolmanStatus(active, state);
   renderMoonHistory(state, connectedBoxes);
 
   // Active card

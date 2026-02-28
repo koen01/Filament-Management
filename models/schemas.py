@@ -21,29 +21,8 @@ class SlotState(BaseModel):
     color_hex: str = Field(default="#00aaff", pattern=r"^#[0-9a-fA-F]{6}$")
     name: str = ""
     manufacturer: str = ""
-    # Optional spool bookkeeping (purely local):
-    # We store a *reference point* and compute remaining based on consumption
-    # since that reference.
-    #
-    # - spool_ref_remaining_g: measured remaining weight at reference time
-    # - spool_ref_consumed_g: total consumed for this slot at reference time
-    # - spool_ref_set_at: unix timestamp when reference was set
-    # - spool_epoch: increments on roll-change; UI shows only current epoch
-    spool_ref_remaining_g: Optional[float] = None
-    spool_ref_consumed_g: Optional[float] = None
-    spool_ref_set_at: Optional[float] = None
+    # spool_epoch: increments on roll-change; used for auto-unlink detection
     spool_epoch: int = 0
-
-    # Running total of consumed grams for the *current* spool epoch.
-    # This is used for remaining-weight calculations so that UI history trimming
-    # ("letzte 4") never changes accounting.
-    spool_epoch_consumed_g_total: float = 0.0
-
-    # Legacy fields from older versions (kept for backward compatibility).
-    # They are no longer used for calculations.
-    spool_start_g: Optional[float] = None
-    remaining_g: Optional[float] = None
-    notes: str = ""
     spoolman_id: Optional[int] = None
 
     @field_validator("material", mode="before")
@@ -88,18 +67,6 @@ class AppState(BaseModel):
     cfs_slots: Dict[str, Any] = Field(default_factory=dict)
     cfs_raw: Dict[str, Any] = Field(default_factory=dict)
 
-    # Bookkeeping for clean spool deduction (persisted)
-    last_accounted_job_mm: int = 0
-    last_accounted_slot: Optional[SlotId] = None
-
-    # --- Read-only history / usage tracking (persisted) ---
-    # Per-slot print history (newest first). Each entry is a dict with:
-    #   ts: unix timestamp (float)
-    #   job: gcode filename
-    #   used_mm: int
-    #   used_g: float
-    slot_history: Dict[str, Any] = Field(default_factory=dict)
-
     # Current job tracking to attribute filament to slots during a print.
     job_track_name: str = ""
     job_track_started_at: float = 0.0
@@ -109,15 +76,12 @@ class AppState(BaseModel):
     job_track_last_state: str = ""
 
     # --- Moonraker global history (read-only, best effort) ---
-    # Snapshot of Moonraker's /server/history/list.  Moonraker history does not
-    # reliably provide per-slot attribution on Creality CFS, so we display this
-    # separately from the per-slot tracker.
     moonraker_history: Any = Field(default_factory=list)
 
     # --- Manual attribution for Moonraker history (local only) ---
     # Keyed by a stable job key (e.g. "<job_id>:<ts_end>") with value:
-    #   {"job": str, "ts": float, "alloc_g": {"2A": 12.3, ...}}
-    # This never talks back to the printer; it's only used to build per-slot history.
+    #   {"job": str, "ts": float}
+    # Used as idempotency marker so the same job is never synced to Spoolman twice.
     moonraker_allocations: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("updated_at", mode="before")
@@ -148,9 +112,6 @@ class UpdateSlotRequest(BaseModel):
     color_hex: Optional[str] = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     name: Optional[str] = None
     manufacturer: Optional[str] = None
-    spool_start_g: Optional[float] = None
-    remaining_g: Optional[float] = None
-    notes: Optional[str] = None
 
 
 class SelectSlotRequest(BaseModel):
@@ -159,16 +120,6 @@ class SelectSlotRequest(BaseModel):
 
 class SetAutoRequest(BaseModel):
     enabled: bool
-
-
-class SpoolResetRequest(BaseModel):
-    slot: SlotId
-    remaining_g: float
-
-
-class SpoolApplyUsageRequest(BaseModel):
-    slot: SlotId
-    used_g: float
 
 
 class FeedRequest(BaseModel):
@@ -218,24 +169,11 @@ class UiSlotUpdateRequest(BaseModel):
     color: Optional[str] = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     name: Optional[str] = None
     vendor: Optional[str] = None
-    spool_start_g: Optional[float] = None
-    remaining_g: Optional[float] = None
-    notes: Optional[str] = None
 
 
 class UiSpoolSetStartRequest(BaseModel):
     slot: SlotId
-    start_g: float = Field(gt=0)
-
-
-class UiSpoolSetRemainingRequest(BaseModel):
-    slot: SlotId
-    remaining_g: float = Field(ge=0)
-
-
-class UiSlotResetRequest(BaseModel):
-    slot: SlotId
-    remaining_g: float
+    start_g: Optional[float] = None  # accepted for backward compat, not stored locally
 
 
 class SpoolmanLinkRequest(BaseModel):

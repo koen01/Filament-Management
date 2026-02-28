@@ -44,9 +44,8 @@
         <aside class="rightCol">
           <section class="card" id="historyCard">
             <div class="cardHead">
-              <div class="cardTitle" data-i18n="section.history">History per Slot</div>
+              <div class="cardTitle" data-i18n="section.spoolman_status">Spoolman Status</div>
               <div class="cardMeta">
-                <span class="tag muted" data-i18n="section.history_last4">last 4</span>
                 <div class="refreshCtl">
                   <label class="refreshLbl" for="refreshSelect">⟳</label>
                   <select id="refreshSelect" class="refreshSel" data-i18n-title="refresh.title" title="Refresh interval">
@@ -109,17 +108,12 @@
             </div>
           </div>
           <div class="formRow">
-            <label data-i18n="modal.weigh_label">Current weight (g)</label>
-            <input id="spoolRemain" type="number" min="0" step="1" data-i18n-placeholder="modal.weigh_ph" placeholder="e.g. 206" />
-            <button id="spoolSaveRemain" class="btn" data-i18n="modal.btn_apply">Apply</button>
-          </div>
-          <div class="formRow">
             <label data-i18n="modal.newroll_label">New roll (g)</label>
             <input id="spoolStart" type="number" min="1" step="1" data-i18n-placeholder="modal.newroll_ph" placeholder="e.g. 1000" />
             <button id="spoolSaveStart" class="btn" data-i18n="modal.btn_rollchange">Roll change</button>
           </div>
-          <div class="modalStats" id="spoolStats">—</div>
-          <div class="modalHint" data-i18n="modal.hint">Note: This saves locally in this app only (no POST to printer). Roll change hides old prints in slot history (kept internally).</div>
+          <div class="modalStats" id="spoolStats"></div>
+          <div class="modalHint" data-i18n="modal.hint">Note: This saves locally in this app only (no POST to printer). Roll change unlinks the Spoolman spool.</div>
         </div>
       </div>
     </div>
