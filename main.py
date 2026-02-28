@@ -383,7 +383,8 @@ def _spoolman_set_extra(spool_id: int, key: str, value: str) -> None:
         return
     try:
         url = f"{base}/api/v1/spool/{spool_id}"
-        data = json.dumps({"extra": {key: value}}).encode("utf-8")
+        # Spoolman requires extra field values to be JSON-encoded strings (double-encoded)
+        data = json.dumps({"extra": {key: json.dumps(value)}}).encode("utf-8")
         req = UrlRequest(url, data=data, headers={
             "User-Agent": "filament-manager/1.0",
             "Content-Type": "application/json",
@@ -407,7 +408,13 @@ def _spoolman_autolink_by_rfid(slot: str, rfid: str, st) -> None:
             return
         for sp in spools:
             extra = sp.get("extra") or {}
-            if extra.get("cfs_rfid") != rfid:
+            raw = extra.get("cfs_rfid", "")
+            # Spoolman stores extra values as JSON-encoded strings — decode before comparing
+            try:
+                stored_rfid = json.loads(raw) if raw else ""
+            except Exception:
+                stored_rfid = raw
+            if stored_rfid != rfid:
                 continue
             spool_id = sp.get("id")
             if not spool_id:
