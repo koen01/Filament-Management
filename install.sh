@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_DIR="/opt/filament-management"
 SERVICE_NAME="filament-management"
-REPO_URL="https://github.com/jkef80/Filament-Management.git"
+REPO_URL="https://github.com/koen01/Filament-Management.git"
 
 if [[ ${EUID} -ne 0 ]]; then
   echo "Please run with sudo"
