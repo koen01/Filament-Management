@@ -540,14 +540,19 @@ def _parse_ws_cfs_data(payload: dict) -> None:
                     slot_obj.manufacturer = vendor
                 st.slots[slot] = slot_obj
 
-            # RFID-based auto-link: if a new RFID appears on an unlinked slot, search Spoolman
+            # RFID-based auto-link: react to any RFID change on this slot
             rfid = mat.get("rfid", "")
             if rfid and state_val == 2:  # state 2 = RFID-tagged spool
                 prev_rfid = _ws_last_rfid.get(slot, "")
                 if rfid != prev_rfid:
                     _ws_last_rfid[slot] = rfid
                     slot_obj2 = st.slots.get(slot)
-                    if slot_obj2 and not getattr(slot_obj2, "spoolman_id", None):
+                    if slot_obj2:
+                        if getattr(slot_obj2, "spoolman_id", None):
+                            # RFID changed on a linked slot — implicit spool swap
+                            slot_obj2.spoolman_id = None
+                            st.slots[slot] = slot_obj2
+                            st.ws_slot_length_m.pop(slot, None)  # reset baseline
                         _spoolman_autolink_by_rfid(slot, rfid, st)
 
             # Spoolman delta: report length used since last snapshot
