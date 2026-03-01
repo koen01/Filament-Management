@@ -24,6 +24,7 @@ git clone --depth 1 "$REPO_URL" /tmp/filament-update
 rsync -a --delete \
   --exclude ".git/" \
   --exclude "data/" \
+  --exclude "venv/" \
   --exclude "__pycache__/" \
   /tmp/filament-update/ "$APP_DIR/"
 
@@ -31,6 +32,10 @@ rm -rf /tmp/filament-update
 
 sudo -u "$REAL_USER" bash -lc "
 cd '$APP_DIR'
+if [[ ! -f venv/bin/activate ]]; then
+  echo 'Recreating virtual environment...'
+  python3 -m venv venv
+fi
 source venv/bin/activate
 pip install -r requirements.txt
 "
