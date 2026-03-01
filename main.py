@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import websockets
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -941,6 +942,14 @@ async def moonraker_job_poll_loop() -> None:
 
 
 app = FastAPI(title="CFSync", version="0.1.1")
+
+# Allow the Fluidd panel bookmarklet to fetch from a different origin (local network only)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 
 @app.middleware("http")
