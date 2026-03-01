@@ -68,6 +68,18 @@ After that, just link each physical spool once via the CFSync slot modal while t
 
 > **Note:** RFID tags are only present on spools with a Creality RFID chip. Spools without RFID can still be linked manually.
 
+## Workflow — adding a new spool with RFID
+
+This is the recommended flow when opening a new spool and adding it to Spoolman with full RFID auto-linking:
+
+1. **Write the RFID tag and add to Spoolman** using [SpoolID](https://play.google.com/store/apps/details?id=dngsoftware.spoolid) (Android). The app writes a unique ID to the Creality RFID chip and can add the spool directly to your Spoolman instance in one step.
+2. **Load the spool** into a CFS slot.
+3. **Open CFSync** → click the slot → select the matching spool from the Spoolman list → click **Link**. CFSync writes the RFID to the spool's `cfs_rfid` field in Spoolman automatically.
+
+From this point on, inserting that spool into any CFS slot will auto-link it — no manual action needed. Filament consumption is reported back to Spoolman after each print.
+
+> Spools without a Creality RFID chip skip step 1 and must be linked manually each time they are loaded.
+
 ## Update
 
 ```bash
