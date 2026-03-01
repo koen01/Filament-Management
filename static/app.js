@@ -649,14 +649,14 @@ function render(state) {
       spoolWrap.innerHTML = makeSpoolSvg(m);
       pod.appendChild(spoolWrap);
 
-      // Material
+      // Material — only shown when slot is occupied
       const matEl = document.createElement("div");
       matEl.className = "slotPodMaterial";
-      matEl.textContent = m.material || "—";
+      matEl.textContent = m.present === false ? "" : (m.material || "—");
       pod.appendChild(matEl);
 
       // Percent remaining (if available from CFS)
-      if (m.percent != null) {
+      if (m.present !== false && m.percent != null) {
         const pctEl = document.createElement("div");
         pctEl.className = "slotPodPct";
         pctEl.textContent = m.percent + "%";
