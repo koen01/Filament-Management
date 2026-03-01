@@ -624,24 +624,24 @@ def _parse_ws_cfs_data(payload: dict) -> None:
 async def _ws_connect_and_run(ws_url: str) -> None:
     """Open one WebSocket connection to the printer and run the polling loop."""
     async with websockets.connect(ws_url, ping_interval=None, ping_timeout=None) as ws:
-        # The printer pushes unsolicited status messages continuously.
-        # Drain for at most 2 seconds so queued messages don't block the handshake.
-        drain_deadline = asyncio.get_event_loop().time() + 2.0
-        while asyncio.get_event_loop().time() < drain_deadline:
+        # Skip only the very first burst (max 5 messages, 0.15 s each).
+        # We keep this minimal — real CFS data arrives immediately and we must not lose it.
+        for _ in range(5):
             try:
-                drained = await asyncio.wait_for(ws.recv(), timeout=0.3)
-                print(f"[WS] Drained {len(str(drained))} byte initial message")
+                await asyncio.wait_for(ws.recv(), timeout=0.15)
             except asyncio.TimeoutError:
                 break
 
-        # Heartbeat handshake — confirms connection is live
+        # Heartbeat handshake. The printer may push status frames before "ok",
+        # so scan up to 10 messages instead of assuming the very next one is the ack.
         await ws.send(json.dumps({"ModeCode": "heart_beat"}))
-        try:
-            reply = await asyncio.wait_for(ws.recv(), timeout=5.0)
-            if str(reply).strip() != "ok":
-                print(f"[WS] Heartbeat reply unexpected: {str(reply)[:80]!r} (continuing)")
-        except asyncio.TimeoutError:
-            print("[WS] Heartbeat timeout (continuing)")
+        for _ in range(10):
+            try:
+                reply = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                if str(reply).strip() == "ok":
+                    break
+            except asyncio.TimeoutError:
+                break
 
         st = load_state()
         st.printer_connected = True
@@ -649,25 +649,43 @@ async def _ws_connect_and_run(ws_url: str) -> None:
         save_state(st)
         print(f"[WS] Connected to {ws_url}")
 
+        # Request initial CFS data immediately after handshake
+        await ws.send(json.dumps({"method": "get", "params": {"boxsInfo": 1}}))
+        _last_request: float = asyncio.get_event_loop().time()
+
+        # Continuous message loop — process everything the printer sends.
+        # Never assume the next recv() is the response to our request; the printer
+        # pushes status frames continuously between our request and its reply.
         while True:
-            await asyncio.sleep(5.0)
-
-            # Request CFS slot data
-            await ws.send(json.dumps({"method": "get", "params": {"boxsInfo": 1}}))
-            response = await asyncio.wait_for(ws.recv(), timeout=10.0)
-
-            # Handle heartbeat from printer (interleaved with our poll response)
-            if isinstance(response, str) and "heart_beat" in response:
-                await ws.send("ok")
+            try:
+                msg = await asyncio.wait_for(ws.recv(), timeout=6.0)
+            except asyncio.TimeoutError:
+                # Printer went silent — re-request and wait again
                 await ws.send(json.dumps({"method": "get", "params": {"boxsInfo": 1}}))
-                response = await asyncio.wait_for(ws.recv(), timeout=10.0)
+                _last_request = asyncio.get_event_loop().time()
+                continue
+
+            # Printer heartbeat ping — ack it immediately
+            if isinstance(msg, str) and "heart_beat" in msg:
+                await ws.send("ok")
+                continue
+
+            # Plain "ok" is the printer acking our heartbeat — nothing to do
+            if isinstance(msg, str) and msg.strip() == "ok":
+                continue
 
             try:
-                data = json.loads(response)
+                data = json.loads(msg)
                 if "boxsInfo" in data:
                     _parse_ws_cfs_data(data)
-            except Exception as e:
-                print(f"[WS] Parse error: {e}")
+            except Exception:
+                pass
+
+            # Re-request every 5 s so we keep receiving fresh pushes
+            now = asyncio.get_event_loop().time()
+            if now - _last_request >= 5.0:
+                await ws.send(json.dumps({"method": "get", "params": {"boxsInfo": 1}}))
+                _last_request = now
 
 
 async def printer_ws_loop() -> None:
@@ -783,7 +801,7 @@ async def moonraker_job_poll_loop() -> None:
             pass
 
 
-app = FastAPI(title="3D Printer Filament Manager", version="0.1.1")
+app = FastAPI(title="CFSync", version="0.1.1")
 
 
 @app.middleware("http")
