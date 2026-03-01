@@ -216,47 +216,57 @@ function openSpoolModal(slotId, meta) {
 }
 
 async function loadSpoolmanDropdown(slotId) {
-  const sel = $('spoolmanSelect');
-  if (!sel) return;
-  sel.innerHTML = '';
-  const ph = document.createElement('option');
-  ph.value = '';
+  const list = $('spoolmanSelect');
+  if (!list) return;
+  list.innerHTML = '';
+  const ph = document.createElement('div');
+  ph.className = 'spoolmanListItem muted';
   ph.textContent = 'Loading spools…';
-  sel.appendChild(ph);
+  list.appendChild(ph);
 
   try {
     const r = await fetch(`/api/ui/spoolman/spools?slot=${encodeURIComponent(slotId)}`, { cache: 'no-store' });
     if (!r.ok) throw new Error(await r.text());
     const data = await r.json();
     const spools = data.spools || [];
-    sel.innerHTML = '';
+    list.innerHTML = '';
 
     if (!spools.length) {
-      const o = document.createElement('option');
-      o.value = '';
+      const o = document.createElement('div');
+      o.className = 'spoolmanListItem muted';
       o.textContent = 'No spools found';
-      sel.appendChild(o);
+      list.appendChild(o);
       return;
     }
 
-    const def = document.createElement('option');
-    def.value = '';
-    def.textContent = '— Pick spool —';
-    sel.appendChild(def);
-
     for (const sp of spools) {
-      const o = document.createElement('option');
-      o.value = String(sp.id);
+      const item = document.createElement('div');
+      item.className = 'spoolmanListItem';
+      item.dataset.id = String(sp.id);
+
+      const swatch = document.createElement('span');
+      swatch.className = 'spoolmanListSwatch';
+      const col = sp.color_hex ? (sp.color_hex.startsWith('#') ? sp.color_hex : '#' + sp.color_hex) : null;
+      if (col) swatch.style.background = col;
+
+      const label = document.createElement('span');
       const remaining = sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '?';
-      o.textContent = `#${sp.id} ${sp.vendor || ''} ${sp.filament_name || ''} · ${sp.material || ''} · ${remaining}`;
-      sel.appendChild(o);
+      label.textContent = `#${sp.id} ${sp.vendor || ''} ${sp.filament_name || ''} · ${sp.material || ''} · ${remaining}`;
+
+      item.appendChild(swatch);
+      item.appendChild(label);
+      item.addEventListener('click', () => {
+        for (const el of list.querySelectorAll('.spoolmanListItem')) el.classList.remove('selected');
+        item.classList.add('selected');
+      });
+      list.appendChild(item);
     }
   } catch (e) {
-    sel.innerHTML = '';
-    const o = document.createElement('option');
-    o.value = '';
+    list.innerHTML = '';
+    const o = document.createElement('div');
+    o.className = 'spoolmanListItem muted';
     o.textContent = `Spoolman error: ${e.message || String(e)}`;
-    sel.appendChild(o);
+    list.appendChild(o);
   }
 }
 
@@ -309,8 +319,9 @@ function initSpoolModal() {
       ev.preventDefault();
       ev.stopPropagation();
       if (!spoolSlotId) return;
-      const sel = $('spoolmanSelect');
-      const id = sel ? Number(sel.value) : 0;
+      const list = $('spoolmanSelect');
+      const selected = list && list.querySelector('.spoolmanListItem.selected');
+      const id = selected ? Number(selected.dataset.id) : 0;
       if (!id) return;
       await postJson('/api/ui/spoolman/link', { slot: spoolSlotId, spoolman_id: id });
       closeSpoolModal();

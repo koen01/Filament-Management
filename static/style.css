@@ -280,7 +280,14 @@ code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospa
 .spoolmanHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .spoolmanTitle{font-size:13px;font-weight:700}
 .spoolmanRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.spoolmanSel{flex:1;min-width:200px;padding:8px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);color:#fff;font-size:13px}
+.spoolmanNotLinkedWrap{display:flex;flex-direction:column;gap:8px}
+.spoolmanList{max-height:180px;overflow-y:auto;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25)}
+.spoolmanListItem{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;transition:background .12s;color:var(--text)}
+.spoolmanListItem:last-child{border-bottom:none}
+.spoolmanListItem:hover{background:rgba(255,255,255,.07)}
+.spoolmanListItem.selected{background:rgba(31,157,85,.18)}
+.spoolmanListItem.muted{cursor:default;color:var(--muted)}
+.spoolmanListSwatch{width:13px;height:13px;border-radius:3px;flex-shrink:0;border:1px solid rgba(255,255,255,.18)}
 .spoolmanInfo{font-size:13px;color:var(--muted);flex:1}
 .spoolmanActions{display:flex;gap:8px}
 
