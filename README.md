@@ -79,3 +79,8 @@ sudo bash <(curl -fsSL https://raw.githubusercontent.com/koen01/Filament-Managem
 ```bash
 sudo journalctl -u filament-management -f
 ```
+
+## Credits
+
+- [jkef80/Filament-Management](https://github.com/jkef80/Filament-Management) — original Moonraker-based filament management that this project evolved from
+- [DaviBe92/k2-websocket-re](https://github.com/DaviBe92/k2-websocket-re) — reverse-engineered Creality K2 WebSocket protocol documentation that made the CFS integration possible
