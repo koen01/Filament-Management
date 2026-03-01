@@ -478,6 +478,11 @@ _VALID_SLOT_IDS = frozenset(
 # Log unknown WS message top-level keys once per session to aid discovery
 _ws_seen_keys: set = set()
 
+# Spoolman-derived percent cache for manual (non-RFID) slots
+_spoolman_manual_pct: Dict[str, Optional[int]] = {}  # slot → percent or None
+_spoolman_pct_refresh_at: Dict[str, float] = {}      # slot → next refresh timestamp
+_SPOOLMAN_PCT_TTL = 60.0
+
 # Known WS key names for printer identity (tried in order)
 _WS_NAME_KEYS = ("machineName", "printerName", "deviceName", "model", "MachineModel", "deviceModel")
 _WS_FW_KEYS   = ("softVersion", "firmwareVersion", "version", "FirmwareVersion", "SoftwareVersion", "firmware")
@@ -601,7 +606,16 @@ def _parse_ws_cfs_data(payload: dict) -> None:
 
             state_val = int(mat.get("state") or 0)
             selected = int(mat.get("selected") or 0)
-            pct = mat.get("percent")
+
+            # state 2 = RFID: WS percent is real sensor data → use it
+            # state 1 = manual: WS always reports 100 (no sensor) → use Spoolman cache
+            # state 0 = empty: no percent
+            if state_val == 2:
+                pct = mat.get("percent")
+            elif state_val == 1:
+                pct = _spoolman_manual_pct.get(slot)  # None until async refresh fills it
+            else:
+                pct = None
 
             st.cfs_slots[slot] = {
                 "percent": pct,
@@ -671,6 +685,49 @@ def _parse_ws_cfs_data(payload: dict) -> None:
         _ws_last_save = now
 
 
+async def _refresh_manual_slot_pcts() -> None:
+    """Calculate Spoolman-based percent for manual (non-RFID) slots and cache it.
+
+    Called after each boxsInfo parse. Uses a per-slot TTL so Spoolman is queried
+    at most once per _SPOOLMAN_PCT_TTL seconds per slot.
+    """
+    base = _spoolman_base_url()
+    if not base:
+        return
+    st = load_state()
+    now = _now()
+    loop = asyncio.get_running_loop()
+
+    for slot, cfs_meta in list(st.cfs_slots.items()):
+        if not isinstance(cfs_meta, dict) or cfs_meta.get("state") != 1:
+            continue
+        slot_obj = st.slots.get(slot)
+        spool_id = getattr(slot_obj, "spoolman_id", None) if slot_obj else None
+        if not spool_id:
+            _spoolman_manual_pct.pop(slot, None)
+            continue
+        if _spoolman_pct_refresh_at.get(slot, 0) > now:
+            continue  # still fresh
+
+        try:
+            sp = await loop.run_in_executor(None, _spoolman_get_spool, base, spool_id)
+            filament = sp.get("filament") or {}
+            nominal_g = float(filament.get("weight") or 0)
+            remaining_g = float(sp.get("remaining_weight") or 0)
+            used_g = float(sp.get("used_weight") or 0)
+            if nominal_g > 0:
+                pct: Optional[int] = max(0, min(100, int(round(remaining_g / nominal_g * 100))))
+            elif remaining_g + used_g > 0:
+                pct = max(0, min(100, int(round(remaining_g / (remaining_g + used_g) * 100))))
+            else:
+                pct = None
+            _spoolman_manual_pct[slot] = pct
+            _spoolman_pct_refresh_at[slot] = now + _SPOOLMAN_PCT_TTL
+            print(f"[SPOOLMAN] Slot {slot} manual percent: {pct}%")
+        except Exception:
+            _spoolman_pct_refresh_at[slot] = now + 10.0  # back off on error
+
+
 async def _ws_connect_and_run(ws_url: str) -> None:
     """Open one WebSocket connection to the printer and run the polling loop."""
     async with websockets.connect(ws_url, ping_interval=None, ping_timeout=None) as ws:
@@ -729,6 +786,7 @@ async def _ws_connect_and_run(ws_url: str) -> None:
                 _parse_ws_printer_info(data)
                 if "boxsInfo" in data:
                     _parse_ws_cfs_data(data)
+                    asyncio.create_task(_refresh_manual_slot_pcts())
             except Exception:
                 pass
 
