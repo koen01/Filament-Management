@@ -46,7 +46,7 @@ class SlotState(BaseModel):
 
 
 class AppState(BaseModel):
-    active_slot: Optional[SlotId] = None
+    active_slot: Optional[str] = None  # legacy; frontend uses cfs_active_slot
     auto_mode: bool = False
     slots: Dict[SlotId, SlotState]
     updated_at: float = Field(default_factory=lambda: time.time())
