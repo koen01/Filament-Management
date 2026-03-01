@@ -284,19 +284,3 @@ code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospa
 .spoolmanInfo{font-size:13px;color:var(--muted);flex:1}
 .spoolmanActions{display:flex;gap:8px}
 
-/* Language switcher */
-.langSwitch{display:flex;gap:4px;align-items:center}
-.langBtn{
-  font-size:11px;
-  font-weight:700;
-  padding:5px 9px;
-  border-radius:999px;
-  border:1px solid var(--line);
-  background: rgba(15,34,54,.55);
-  color:var(--muted);
-  cursor:pointer;
-  letter-spacing:.3px;
-  transition: border-color .15s, color .15s;
-}
-.langBtn:hover{border-color:rgba(255,255,255,.25);color:var(--text)}
-.langBtn.active{border-color:rgba(31,157,85,.45);color:var(--text)}

@@ -11,16 +11,12 @@
       <div class="brand">
         <div class="logo">🧵</div>
         <div>
-          <div class="title" data-i18n="header.title">Filament Display</div>
+          <div class="title">Filament Display</div>
           <div class="subtitle">&copy; bei jkef 2026</div>
         </div>
       </div>
 
       <div class="badges">
-        <div class="langSwitch">
-          <button class="langBtn" data-lang="de">DE</button>
-          <button class="langBtn" data-lang="en">EN</button>
-        </div>
         <div id="printerBadge" class="badge">Printer: —</div>
         <div id="cfsBadge" class="badge">CFS: —</div>
       </div>
@@ -33,7 +29,7 @@
 
           <section class="card" style="margin-top: 16px;">
             <div class="cardHead">
-              <div class="cardTitle" data-i18n="section.active">Active</div>
+              <div class="cardTitle">Active</div>
               <div id="activeMeta" class="cardMeta">—</div>
             </div>
             <div class="activeRow" id="activeRow"></div>
@@ -44,18 +40,18 @@
         <aside class="rightCol">
           <section class="card" id="historyCard">
             <div class="cardHead">
-              <div class="cardTitle" data-i18n="section.spoolman_status">Spoolman Status</div>
+              <div class="cardTitle">Spoolman Status</div>
               <div class="cardMeta">
                 <div class="refreshCtl">
                   <label class="refreshLbl" for="refreshSelect">⟳</label>
-                  <select id="refreshSelect" class="refreshSel" data-i18n-title="refresh.title" title="Refresh interval">
+                  <select id="refreshSelect" class="refreshSel" title="Refresh interval">
                     <option value="2000">2s</option>
                     <option value="5000">5s</option>
                     <option value="10000">10s</option>
                     <option value="15000">15s</option>
                     <option value="30000">30s</option>
                   </select>
-                  <button id="refreshToggle" class="refreshBtn" data-i18n-title="refresh.toggle_title" title="Auto-refresh on/off">⏸</button>
+                  <button id="refreshToggle" class="refreshBtn" title="Auto-refresh on/off">⏸</button>
                 </div>
               </div>
             </div>
@@ -66,11 +62,10 @@
       </div>
 
       <footer class="footer">
-        <span data-i18n-html="footer.tip">Tip: If colors/material are not shown, set <code>printer_url</code> in <code>data/config.json</code> to your printer's IP.</span>
+        <span>Tip: If colors/material are not shown, set <code>printer_url</code> in <code>data/config.json</code> to your printer's IP.</span>
       </footer>
     </main>
 
-    <script src="/static/i18n.js"></script>
     <!-- cache-bust: force clients to fetch latest app.js after updates -->
     <script src="/static/app.js?v=20260225-3"></script>
 
@@ -83,33 +78,33 @@
             <div class="modalTitle" id="spoolTitle">Slot</div>
             <div class="modalSub" id="spoolSub">—</div>
           </div>
-          <button class="modalClose" id="spoolClose" data-i18n-title="modal.close" title="Close">✕</button>
+          <button class="modalClose" id="spoolClose" title="Close">✕</button>
         </div>
         <div class="modalBody">
           <div id="spoolmanSection" class="spoolmanSection" style="display:none;">
             <div class="spoolmanHead">
-              <span class="spoolmanTitle" data-i18n="spoolman.section">Spoolman</span>
-              <span id="spoolmanBadge" class="tag muted" data-i18n="spoolman.not_linked">not linked</span>
+              <span class="spoolmanTitle">Spoolman</span>
+              <span id="spoolmanBadge" class="tag muted">not linked</span>
             </div>
             <div id="spoolmanNotLinked" class="spoolmanRow">
               <select id="spoolmanSelect" class="spoolmanSel"></select>
-              <button id="spoolmanLink" class="btn" data-i18n="spoolman.btn_link">Link</button>
+              <button id="spoolmanLink" class="btn">Link</button>
             </div>
             <div id="spoolmanLinked" class="spoolmanRow" style="display:none;">
               <span id="spoolmanInfo" class="spoolmanInfo">—</span>
               <div class="spoolmanActions">
-                <button id="spoolmanRefresh" class="btn mini" data-i18n="spoolman.btn_refresh">Refresh</button>
-                <button id="spoolmanUnlink" class="btn mini" data-i18n="spoolman.btn_unlink">Unlink</button>
+                <button id="spoolmanRefresh" class="btn mini">Refresh</button>
+                <button id="spoolmanUnlink" class="btn mini">Unlink</button>
               </div>
             </div>
           </div>
           <div class="formRow">
-            <label data-i18n="modal.newroll_label">New roll (g)</label>
-            <input id="spoolStart" type="number" min="1" step="1" data-i18n-placeholder="modal.newroll_ph" placeholder="e.g. 1000" />
-            <button id="spoolSaveStart" class="btn" data-i18n="modal.btn_rollchange">Roll change</button>
+            <label>New roll (g)</label>
+            <input id="spoolStart" type="number" min="1" step="1" placeholder="e.g. 1000" />
+            <button id="spoolSaveStart" class="btn">Roll change</button>
           </div>
           <div class="modalStats" id="spoolStats"></div>
-          <div class="modalHint" data-i18n="modal.hint">Note: This saves locally in this app only (no POST to printer). Roll change unlinks the Spoolman spool.</div>
+          <div class="modalHint">Note: This saves locally in this app only (no POST to printer). Roll change unlinks the Spoolman spool.</div>
         </div>
       </div>
     </div>

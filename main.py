@@ -468,6 +468,9 @@ _WS_SAVE_INTERVAL = 10.0
 _ws_last_save: float = 0.0
 _ws_last_rfid: Dict[str, str] = {}  # slot → last seen RFID code
 
+_moon_last_state: str = ""  # last known print_stats.state from Moonraker
+_moon_job_start_lengths: Dict[str, float] = {}  # ws_slot_length_m snapshot at job start
+
 _VALID_SLOT_IDS = frozenset(
     f"{b}{l}" for b in "1234" for l in "ABCD"
 )
@@ -483,6 +486,19 @@ def _printer_ws_url() -> str:
     if not host:
         return ""
     return f"ws://{host.split(':')[0]}:9999"
+
+
+def _moonraker_base_url() -> str:
+    """Return the Moonraker HTTP base URL (port 7125), or empty string if not configured."""
+    cfg = load_config()
+    mu = (cfg.get("moonraker_url") or "").strip()
+    if mu:
+        parsed = urlparse(mu)
+        host = parsed.hostname or ""
+        port = parsed.port or 7125
+        return f"http://{host}:{port}"
+    host = (cfg.get("printer_url") or "").strip().split(":")[0]
+    return f"http://{host}:7125" if host else ""
 
 
 def _normalize_ws_color(raw: str) -> str:
@@ -581,20 +597,8 @@ def _parse_ws_cfs_data(payload: dict) -> None:
                             st.ws_slot_length_m.pop(slot, None)  # reset baseline
                         _spoolman_autolink_by_rfid(slot, rfid, st)
 
-            # Spoolman delta: report length used since last snapshot
+            # Track cumulative length for per-job Moonraker attribution
             cur_m = float(mat.get("usedMaterialLength") or 0)
-            prev_m = float(st.ws_slot_length_m.get(slot, cur_m))
-            delta_m = cur_m - prev_m
-            if delta_m > 0.01:
-                slot_obj = st.slots.get(slot)
-                if slot_obj and getattr(slot_obj, "spoolman_id", None):
-                    try:
-                        mat_str = str(getattr(slot_obj, "material", "OTHER") or "OTHER")
-                        g = mm_to_g(mat_str, delta_m * 1000)
-                        if g > 0:
-                            _spoolman_report_usage(slot_obj.spoolman_id, g)
-                    except Exception:
-                        pass
             st.ws_slot_length_m[slot] = cur_m
 
     # Store box connection metadata so the frontend can show correct boxes
@@ -699,6 +703,85 @@ async def printer_ws_loop() -> None:
         backoff = min(backoff * 2, 60.0)
 
 
+def _moon_report_job_usage(filament_mm: float) -> None:
+    """Attribute Moonraker's filament_used proportionally across slots using WS deltas."""
+    global _moon_job_start_lengths
+    st = load_state()
+    slot_deltas: Dict[str, float] = {}
+    for slot, cur_m in st.ws_slot_length_m.items():
+        start_m = _moon_job_start_lengths.get(slot, cur_m)
+        delta = cur_m - start_m
+        if delta > 0.01:
+            slot_deltas[slot] = delta
+    total_delta_m = sum(slot_deltas.values())
+    if not slot_deltas or total_delta_m <= 0:
+        print(f"[MOON] Job complete: {filament_mm:.0f}mm used, no WS slot deltas to attribute")
+        _moon_job_start_lengths = {}
+        return
+    for slot, delta_m in slot_deltas.items():
+        slot_obj = st.slots.get(slot)
+        if not slot_obj:
+            continue
+        spool_id = getattr(slot_obj, "spoolman_id", None)
+        if not spool_id:
+            continue
+        proportion = delta_m / total_delta_m
+        mat_str = str(getattr(slot_obj, "material", "OTHER") or "OTHER")
+        g = mm_to_g(mat_str, filament_mm * proportion)
+        if g > 0:
+            _spoolman_report_usage(spool_id, g)
+            print(f"[MOON] Slot {slot}: {g:.2f}g ({proportion * 100:.0f}% of job)")
+    _moon_job_start_lengths = {}
+
+
+async def moonraker_job_poll_loop() -> None:
+    """Poll Moonraker print_stats every 5s and attribute filament usage at job completion."""
+    global _moon_last_state, _moon_job_start_lengths
+
+    base = _moonraker_base_url()
+    if not base:
+        print("[MOON] No printer URL configured — job poll loop not started.")
+        return
+
+    print(f"[MOON] Starting job poll loop against {base}")
+
+    _ACTIVE_STATES = {"printing", "paused"}
+    _ENDED_STATES = {"complete", "error", "cancelled", "standby"}
+
+    while True:
+        await asyncio.sleep(5.0)
+        try:
+            url = f"{base}/printer/objects/query?print_stats"
+            data = _http_get_json(url, timeout=5.0)
+            ps = (data.get("result") or {}).get("status", {}).get("print_stats") or {}
+            new_state = str(ps.get("state") or "").lower()
+            filament_used_mm = float(ps.get("filament_used") or 0)
+
+            prev = _moon_last_state
+            if new_state == prev:
+                continue
+
+            _moon_last_state = new_state
+            print(f"[MOON] State: {prev!r} → {new_state!r}")
+
+            if new_state in _ACTIVE_STATES and prev not in _ACTIVE_STATES:
+                # Job started — snapshot current ws_slot_length_m
+                st = load_state()
+                _moon_job_start_lengths = dict(st.ws_slot_length_m)
+                print(f"[MOON] Job started; snapshotted {len(_moon_job_start_lengths)} slot lengths")
+
+            elif new_state == "complete" and prev in _ACTIVE_STATES:
+                print(f"[MOON] Job complete: {filament_used_mm:.0f}mm filament used")
+                _moon_report_job_usage(filament_used_mm)
+
+            elif new_state in {"error", "cancelled"} and prev in _ACTIVE_STATES:
+                print(f"[MOON] Job {new_state} — skipping usage report")
+                _moon_job_start_lengths = {}
+
+        except Exception as e:
+            # Network errors are expected when printer is off — don't log verbosely
+            pass
+
 
 app = FastAPI(title="3D Printer Filament Manager", version="0.1.1")
 
@@ -727,6 +810,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 async def _startup():
     _ensure_data_files()
     asyncio.create_task(printer_ws_loop())
+    asyncio.create_task(moonraker_job_poll_loop())
 
 
 @app.get("/")

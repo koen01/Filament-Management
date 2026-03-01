@@ -70,7 +70,7 @@ function slotEl(slotId, label, meta, isActive) {
   right.className = "slotRight";
   const tag = document.createElement("div");
   tag.className = "tag" + (!meta.material ? " muted" : "");
-  tag.textContent = meta.present === false ? t('status.empty') : (isActive ? t('status.active') : t('status.ready'));
+  tag.textContent = meta.present === false ? 'empty' : (isActive ? 'active' : 'ready');
   right.appendChild(tag);
 
   if (meta.percent != null) {
@@ -119,8 +119,8 @@ async function postJson(url, payload) {
     body: JSON.stringify(payload),
   });
   if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(t || `HTTP ${r.status}`);
+    const txt = await r.text().catch(() => "");
+    throw new Error(txt || `HTTP ${r.status}`);
   }
   return r.json();
 }
@@ -171,48 +171,38 @@ function openSpoolModal(slotId, meta) {
   if (smSec) {
     if (spoolmanConfigured) {
       smSec.style.display = '';
-      const badge = $('spoolmanBadge');
+      const bdg = $('spoolmanBadge');
       const notLinked = $('spoolmanNotLinked');
       const linked = $('spoolmanLinked');
       const info = $('spoolmanInfo');
       const smId = meta.spoolman_id;
       if (smId) {
-        if (badge) { badge.textContent = t('spoolman.linked'); badge.classList.remove('muted'); badge.classList.add('ok'); }
+        if (bdg) { bdg.textContent = 'linked'; bdg.classList.remove('muted'); bdg.classList.add('ok'); }
         if (notLinked) notLinked.style.display = 'none';
         if (linked) linked.style.display = 'flex';
         if (info) {
-          info.textContent = t('spoolman.loading_spool');
+          info.textContent = 'Loading spool data…';
           // Fetch live remaining from Spoolman
           fetch(`/api/ui/spoolman/spool_detail?slot=${encodeURIComponent(slotId)}`, { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
+              const vendor = meta.manufacturer || meta.vendor || '';
+              const name = meta.name || '';
               if (data.spool && data.spool.remaining_weight != null) {
-                info.textContent = t('spoolman.linked_info', {
-                  id: String(smId),
-                  vendor: meta.manufacturer || meta.vendor || '',
-                  name: meta.name || '',
-                  remaining: fmtG(data.spool.remaining_weight),
-                });
+                info.textContent = `Spool #${smId} · ${vendor} ${name} · ${fmtG(data.spool.remaining_weight)}`;
               } else {
-                info.textContent = t('spoolman.linked_info', {
-                  id: String(smId),
-                  vendor: meta.manufacturer || meta.vendor || '',
-                  name: meta.name || '',
-                  remaining: data.error ? t('spoolman.unavailable') : '—',
-                });
+                const remaining = data.error ? 'Spoolman unreachable' : '—';
+                info.textContent = `Spool #${smId} · ${vendor} ${name} · ${remaining}`;
               }
             })
             .catch(() => {
-              info.textContent = t('spoolman.linked_info', {
-                id: String(smId),
-                vendor: meta.manufacturer || meta.vendor || '',
-                name: meta.name || '',
-                remaining: t('spoolman.unavailable'),
-              });
+              const vendor = meta.manufacturer || meta.vendor || '';
+              const name = meta.name || '';
+              info.textContent = `Spool #${smId} · ${vendor} ${name} · Spoolman unreachable`;
             });
         }
       } else {
-        if (badge) { badge.textContent = t('spoolman.not_linked'); badge.classList.add('muted'); badge.classList.remove('ok'); }
+        if (bdg) { bdg.textContent = 'not linked'; bdg.classList.add('muted'); bdg.classList.remove('ok'); }
         if (notLinked) notLinked.style.display = 'flex';
         if (linked) linked.style.display = 'none';
         loadSpoolmanDropdown(slotId);
@@ -231,7 +221,7 @@ async function loadSpoolmanDropdown(slotId) {
   sel.innerHTML = '';
   const ph = document.createElement('option');
   ph.value = '';
-  ph.textContent = t('spoolman.loading');
+  ph.textContent = 'Loading spools…';
   sel.appendChild(ph);
 
   try {
@@ -244,33 +234,28 @@ async function loadSpoolmanDropdown(slotId) {
     if (!spools.length) {
       const o = document.createElement('option');
       o.value = '';
-      o.textContent = t('spoolman.no_spools');
+      o.textContent = 'No spools found';
       sel.appendChild(o);
       return;
     }
 
     const def = document.createElement('option');
     def.value = '';
-    def.textContent = t('spoolman.select_ph');
+    def.textContent = '— Pick spool —';
     sel.appendChild(def);
 
     for (const sp of spools) {
       const o = document.createElement('option');
       o.value = String(sp.id);
-      o.textContent = t('spoolman.option_label', {
-        id: String(sp.id),
-        vendor: sp.vendor || '',
-        name: sp.filament_name || '',
-        material: sp.material || '',
-        remaining: sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '?',
-      });
+      const remaining = sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '?';
+      o.textContent = `#${sp.id} ${sp.vendor || ''} ${sp.filament_name || ''} · ${sp.material || ''} · ${remaining}`;
       sel.appendChild(o);
     }
   } catch (e) {
     sel.innerHTML = '';
     const o = document.createElement('option');
     o.value = '';
-    o.textContent = t('spoolman.error', { msg: e.message || String(e) });
+    o.textContent = `Spoolman error: ${e.message || String(e)}`;
     sel.appendChild(o);
   }
 }
@@ -352,7 +337,7 @@ function initSpoolModal() {
       // Re-fetch spool detail from Spoolman
       const info = $('spoolmanInfo');
       try {
-        if (info) info.textContent = t('spoolman.loading_spool');
+        if (info) info.textContent = 'Loading spool data…';
         const r = await fetch(`/api/ui/spoolman/spool_detail?slot=${encodeURIComponent(spoolSlotId)}`, { cache: 'no-store' });
         const data = await r.json();
         if (data.spool && data.spool.remaining_weight != null) {
@@ -360,17 +345,15 @@ function initSpoolModal() {
           const stateJ = await stateR.json();
           const stateData = stateJ.result || stateJ;
           const slotData = (stateData.slots || {})[spoolSlotId] || {};
-          if (info) info.textContent = t('spoolman.linked_info', {
-            id: String(data.spool.id || slotData.spoolman_id || ''),
-            vendor: slotData.manufacturer || slotData.vendor || '',
-            name: slotData.name || '',
-            remaining: fmtG(data.spool.remaining_weight),
-          });
+          const id = data.spool.id || slotData.spoolman_id || '';
+          const vendor = slotData.manufacturer || slotData.vendor || '';
+          const name = slotData.name || '';
+          if (info) info.textContent = `Spool #${id} · ${vendor} ${name} · ${fmtG(data.spool.remaining_weight)}`;
         } else {
-          if (info) info.textContent = data.error ? t('spoolman.unavailable') : '—';
+          if (info) info.textContent = data.error ? 'Spoolman unreachable' : '—';
         }
       } catch (e) {
-        if (info) info.textContent = t('spoolman.error', { msg: e.message || String(e) });
+        if (info) info.textContent = `Spoolman error: ${e.message || String(e)}`;
       }
     };
   }
@@ -386,14 +369,14 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
   wrap.innerHTML = '';
   const loading = document.createElement('div');
   loading.className = 'tag muted';
-  loading.textContent = t('spoolman.loading_spool');
+  loading.textContent = 'Loading spool data…';
   wrap.appendChild(loading);
 
   if (!spoolmanConfigured) {
     wrap.innerHTML = '';
     const msg = document.createElement('div');
     msg.className = 'tag muted';
-    msg.textContent = t('spoolman.not_configured');
+    msg.textContent = 'Spoolman not configured';
     wrap.appendChild(msg);
     return;
   }
@@ -402,7 +385,7 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
     wrap.innerHTML = '';
     const msg = document.createElement('div');
     msg.className = 'tag muted';
-    msg.textContent = t('spoolman.slot_not_linked');
+    msg.textContent = 'No spool linked';
     wrap.appendChild(msg);
     return;
   }
@@ -415,7 +398,7 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
     if (!data.linked) {
       const msg = document.createElement('div');
       msg.className = 'tag muted';
-      msg.textContent = t('spoolman.slot_not_linked');
+      msg.textContent = 'No spool linked';
       wrap.appendChild(msg);
       return;
     }
@@ -423,7 +406,7 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
     if (!data.spool) {
       const msg = document.createElement('div');
       msg.className = 'tag muted';
-      msg.textContent = t('spoolman.unavailable');
+      msg.textContent = 'Spoolman unreachable';
       wrap.appendChild(msg);
       return;
     }
@@ -433,10 +416,10 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
     card.className = 'spoolStatusCard';
 
     const rows = [
-      { label: t('spoolman.remaining'), value: sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '—' },
-      { label: t('spoolman.used_total'), value: sp.used_weight != null ? fmtG(sp.used_weight) : '—' },
-      { label: t('spoolman.first_used'), value: sp.first_used ? fmtTs(new Date(sp.first_used).getTime() / 1000) : '—' },
-      { label: t('spoolman.last_used'), value: sp.last_used ? fmtTs(new Date(sp.last_used).getTime() / 1000) : '—' },
+      { label: 'Remaining weight', value: sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '—' },
+      { label: 'Total used', value: sp.used_weight != null ? fmtG(sp.used_weight) : '—' },
+      { label: 'First used', value: sp.first_used ? fmtTs(new Date(sp.first_used).getTime() / 1000) : '—' },
+      { label: 'Last used', value: sp.last_used ? fmtTs(new Date(sp.last_used).getTime() / 1000) : '—' },
     ];
 
     for (const row of rows) {
@@ -458,7 +441,7 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
     wrap.innerHTML = '';
     const msg = document.createElement('div');
     msg.className = 'tag muted';
-    msg.textContent = t('spoolman.unavailable');
+    msg.textContent = 'Spoolman unreachable';
     wrap.appendChild(msg);
   }
 }
@@ -468,7 +451,7 @@ function render(state) {
   const cfsBadge = $("cfsBadge");
 
   const printerOk = !!state.printer_connected;
-  badge(printerBadge, printerOk ? t('badge.printer_ok') : t('badge.printer_off'), printerOk ? "ok" : "bad");
+  badge(printerBadge, printerOk ? 'Printer: connected' : 'Printer: disconnected', printerOk ? "ok" : "bad");
   if (!printerOk && state.printer_last_error) {
     printerBadge.textContent += " (" + state.printer_last_error + ")";
   }
@@ -476,7 +459,7 @@ function render(state) {
   const cfsOk = !!state.cfs_connected;
   badge(
     cfsBadge,
-    cfsOk ? t('badge.cfs_ok', {ts: fmtTs(state.cfs_last_update)}) : t('badge.cfs_off'),
+    cfsOk ? `CFS: detected · ${fmtTs(state.cfs_last_update)}` : 'CFS: —',
     cfsOk ? "ok" : "warn"
   );
 
@@ -606,8 +589,8 @@ async function tick() {
     spoolmanConfigured = !!st.spoolman_configured;
     render(st);
   } catch (e) {
-    badge($("printerBadge"), t('badge.printer_dash'), "warn");
-    badge($("cfsBadge"), t('badge.cfs_off'), "warn");
+    badge($("printerBadge"), 'Printer: —', "warn");
+    badge($("cfsBadge"), 'CFS: —', "warn");
   }
 }
 
@@ -654,25 +637,7 @@ function initRefreshControls() {
   applyRefreshTimer();
 }
 
-function initLangSwitcher() {
-  const btns = document.querySelectorAll('.langBtn');
-  function updateActive() {
-    const cur = i18nLang();
-    for (const b of btns) b.classList.toggle('active', b.dataset.lang === cur);
-  }
-  for (const b of btns) {
-    b.addEventListener('click', () => {
-      i18nSetLang(b.dataset.lang);
-      updateActive();
-      tick(); // re-render dynamic content with new language
-    });
-  }
-  updateActive();
-}
-
 function boot() {
-  i18nSetLang(i18nDetectLang());
-  initLangSwitcher();
   initSpoolModal();
   initRefreshControls();
   tick();
