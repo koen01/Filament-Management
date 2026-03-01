@@ -64,6 +64,8 @@ CFSync can automatically link a CFS slot to the correct Spoolman spool when an R
 
 After that, just link each physical spool once via the CFSync slot modal while the spool is loaded. The RFID is written to Spoolman automatically. From then on, inserting that spool into any CFS slot will auto-link it.
 
+![Spoolman link modal](docs/spoolman-link.png)
+
 > **Note:** RFID tags are only present on spools with a Creality RFID chip. Spools without RFID can still be linked manually.
 
 ## Update
