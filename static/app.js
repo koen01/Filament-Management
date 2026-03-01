@@ -526,6 +526,17 @@ function makeSpoolSvg(meta) {
 }
 
 function render(state) {
+  // Spoolman external link
+  const smExtLink = $("spoolmanExtLink");
+  if (smExtLink) {
+    if (state.spoolman_url) {
+      smExtLink.href = state.spoolman_url;
+      smExtLink.style.display = '';
+    } else {
+      smExtLink.style.display = 'none';
+    }
+  }
+
   // Update subtitle with printer identity from WS
   const sub = $("printerSubtitle");
   if (sub) {

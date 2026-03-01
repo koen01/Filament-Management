@@ -1014,6 +1014,7 @@ def _ui_state_dict(state: AppState) -> dict:
     d.setdefault("cfs_active_slot", None)
     d.setdefault("cfs_slots", {})
     d["spoolman_configured"] = bool(_spoolman_base_url())
+    d["spoolman_url"] = _spoolman_base_url()
 
     return d
 
