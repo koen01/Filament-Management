@@ -21,7 +21,7 @@ echo "Updating Filament Management..."
 rm -rf /tmp/filament-update
 git clone --depth 1 "$REPO_URL" /tmp/filament-update
 
-rsync -a --delete \
+rsync -a \
   --exclude ".git/" \
   --exclude "data/" \
   --exclude "venv/" \
