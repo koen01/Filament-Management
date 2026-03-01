@@ -186,19 +186,19 @@ function openSpoolModal(slotId, meta) {
           fetch(`/api/ui/spoolman/spool_detail?slot=${encodeURIComponent(slotId)}`, { cache: 'no-store' })
             .then(r => r.json())
             .then(data => {
-              const vendor = meta.manufacturer || meta.vendor || '';
-              const name = meta.name || '';
-              if (data.spool && data.spool.remaining_weight != null) {
-                info.textContent = `Spool #${smId} · ${vendor} ${name} · ${fmtG(data.spool.remaining_weight)}`;
+              if (data.spool) {
+                const fil = data.spool.filament || {};
+                const vendor = (fil.vendor || {}).name || meta.manufacturer || meta.vendor || '';
+                const name = fil.name || meta.name || '';
+                const material = (fil.material || '').toUpperCase();
+                const remaining = data.spool.remaining_weight != null ? fmtG(data.spool.remaining_weight) : '—';
+                info.textContent = [vendor, name, material, remaining].filter(Boolean).join(' · ');
               } else {
-                const remaining = data.error ? 'Spoolman unreachable' : '—';
-                info.textContent = `Spool #${smId} · ${vendor} ${name} · ${remaining}`;
+                info.textContent = data.error ? 'Spoolman unreachable' : `Spool #${smId}`;
               }
             })
             .catch(() => {
-              const vendor = meta.manufacturer || meta.vendor || '';
-              const name = meta.name || '';
-              info.textContent = `Spool #${smId} · ${vendor} ${name} · Spoolman unreachable`;
+              info.textContent = 'Spoolman unreachable';
             });
         }
       } else {
@@ -351,15 +351,13 @@ function initSpoolModal() {
         if (info) info.textContent = 'Loading spool data…';
         const r = await fetch(`/api/ui/spoolman/spool_detail?slot=${encodeURIComponent(spoolSlotId)}`, { cache: 'no-store' });
         const data = await r.json();
-        if (data.spool && data.spool.remaining_weight != null) {
-          const stateR = await fetch('/api/ui/state', { cache: 'no-store' });
-          const stateJ = await stateR.json();
-          const stateData = stateJ.result || stateJ;
-          const slotData = (stateData.slots || {})[spoolSlotId] || {};
-          const id = data.spool.id || slotData.spoolman_id || '';
-          const vendor = slotData.manufacturer || slotData.vendor || '';
-          const name = slotData.name || '';
-          if (info) info.textContent = `Spool #${id} · ${vendor} ${name} · ${fmtG(data.spool.remaining_weight)}`;
+        if (data.spool) {
+          const fil = data.spool.filament || {};
+          const vendor = (fil.vendor || {}).name || '';
+          const name = fil.name || '';
+          const material = (fil.material || '').toUpperCase();
+          const remaining = data.spool.remaining_weight != null ? fmtG(data.spool.remaining_weight) : '—';
+          if (info) info.textContent = [vendor, name, material, remaining].filter(Boolean).join(' · ');
         } else {
           if (info) info.textContent = data.error ? 'Spoolman unreachable' : '—';
         }
@@ -423,12 +421,44 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
     }
 
     const sp = data.spool;
+    const filament = sp.filament || {};
+    const filamentName = filament.name || '';
+    const material = (filament.material || '').toUpperCase();
+    const vendor = (filament.vendor || {}).name || '';
+    const colorHex = filament.color_hex
+      ? (filament.color_hex.startsWith('#') ? filament.color_hex : '#' + filament.color_hex)
+      : null;
+
     const card = document.createElement('div');
     card.className = 'spoolStatusCard';
 
+    // Filament identity header
+    const header = document.createElement('div');
+    header.className = 'spoolStatusFilament';
+    const swatch = document.createElement('span');
+    swatch.className = 'spoolmanListSwatch';
+    swatch.style.width = '20px';
+    swatch.style.height = '20px';
+    swatch.style.borderRadius = '5px';
+    swatch.style.flexShrink = '0';
+    if (colorHex) swatch.style.background = colorHex;
+    header.appendChild(swatch);
+    const info = document.createElement('div');
+    info.className = 'spoolStatusFilamentInfo';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'spoolStatusFilamentName';
+    nameEl.textContent = [vendor, filamentName].filter(Boolean).join(' · ') || `Spool #${sp.id}`;
+    const subEl = document.createElement('div');
+    subEl.className = 'spoolStatusFilamentSub';
+    subEl.textContent = [material, `#${sp.id}`].filter(Boolean).join(' · ');
+    info.appendChild(nameEl);
+    info.appendChild(subEl);
+    header.appendChild(info);
+    card.appendChild(header);
+
     const rows = [
-      { label: 'Remaining weight', value: sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '—' },
-      { label: 'Total used', value: sp.used_weight != null ? fmtG(sp.used_weight) : '—' },
+      { label: 'Remaining', value: sp.remaining_weight != null ? fmtG(sp.remaining_weight) : '—' },
+      { label: 'Used total', value: sp.used_weight != null ? fmtG(sp.used_weight) : '—' },
       { label: 'First used', value: sp.first_used ? fmtTs(new Date(sp.first_used).getTime() / 1000) : '—' },
       { label: 'Last used', value: sp.last_used ? fmtTs(new Date(sp.last_used).getTime() / 1000) : '—' },
     ];
@@ -455,6 +485,44 @@ async function fetchAndRenderSpoolmanStatus(activeSlot, state) {
     msg.textContent = 'Spoolman unreachable';
     wrap.appendChild(msg);
   }
+}
+
+function hexBrightness(hex) {
+  const h = (hex || '').replace('#', '');
+  if (h.length !== 6) return 128;
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000;
+}
+
+function makeSpoolSvg(meta) {
+  const present = meta.present !== false;
+  const rawColor = meta.color || '';
+  const hasColor = present && rawColor && rawColor !== '#2a3442' && rawColor.length >= 4;
+
+  if (!hasColor) {
+    // Empty slot — dark disk with diagonal slash
+    return `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="40" cy="40" r="36" fill="#1e2230" stroke="#141720" stroke-width="3"/>
+      <line x1="22" y1="58" x2="58" y2="22" stroke="#484d5a" stroke-width="4" stroke-linecap="round"/>
+    </svg>`;
+  }
+
+  const c = rawColor.startsWith('#') ? rawColor : '#' + rawColor;
+  const bright = hexBrightness(c);
+  const tick  = bright > 145 ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.18)';
+
+  return `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="40" cy="40" r="36" fill="${c}" stroke="#141720" stroke-width="3"/>
+    <circle cx="40" cy="40" r="20" fill="none" stroke="${tick}" stroke-width="1.5"/>
+    <line x1="40" y1="22" x2="40" y2="29" stroke="${tick}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="40" y1="51" x2="40" y2="58" stroke="${tick}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="22" y1="40" x2="29" y2="40" stroke="${tick}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="51" y1="40" x2="58" y2="40" stroke="${tick}" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="40" cy="40" r="10" fill="#1e2230" stroke="#2e3346" stroke-width="1.5"/>
+    <circle cx="40" cy="40" r="3.5" fill="#50576a"/>
+  </svg>`;
 }
 
 function render(state) {
@@ -520,52 +588,90 @@ function render(state) {
   };
 
   function makeBoxCard(boxNum) {
-    const card = document.createElement("div");
-    card.className = "card";
+    const row = document.createElement("div");
+    row.className = "boxRow";
 
-    const head = document.createElement("div");
-    head.className = "cardHead";
+    // Left: box header showing box number + env data
+    const header = document.createElement("div");
+    header.className = "boxHeader";
 
-    const title = document.createElement("div");
-    title.className = "cardTitle";
-    title.textContent = `Box ${boxNum}`;
-
-    const meta = document.createElement("div");
-    meta.className = "cardMeta";
+    const hTitle = document.createElement("div");
+    hTitle.className = "boxHeaderTitle";
+    hTitle.textContent = `Box ${boxNum}`;
+    header.appendChild(hTitle);
 
     const bi = boxesInfo[boxNum] || {};
-    // Temperature / humidity per box (Creality reports these as numbers/strings)
     const tC = bi.temperature_c;
     const rh = bi.humidity_pct;
-    const hasT = (typeof tC === "number" && !Number.isNaN(tC));
-    const hasRh = (typeof rh === "number" && !Number.isNaN(rh));
-
-    // Render as compact "chips" (bigger + clearer than plain text)
-    if (hasT) {
-      const sp = document.createElement("span");
-      sp.className = "envItem";
-      sp.textContent = `🌡 ${Math.round(tC)}°C`;
-      meta.appendChild(sp);
+    if (typeof tC === "number" && !Number.isNaN(tC)) {
+      const chip = document.createElement("div");
+      chip.className = "boxEnvChip";
+      chip.textContent = `🌡 ${Math.round(tC)}°C`;
+      header.appendChild(chip);
     }
-    if (hasRh) {
-      const sp = document.createElement("span");
-      sp.className = "envItem";
-      sp.textContent = `💧 ${Math.round(rh)}%`;
-      meta.appendChild(sp);
+    if (typeof rh === "number" && !Number.isNaN(rh)) {
+      const chip = document.createElement("div");
+      chip.className = "boxEnvChip";
+      chip.textContent = `💧 ${Math.round(rh)}%`;
+      header.appendChild(chip);
     }
+    row.appendChild(header);
 
-    head.appendChild(title);
-    if (meta.childNodes.length) head.appendChild(meta);
-    card.appendChild(head);
-
+    // Right: 4 slot pods
     const slotsWrap = document.createElement("div");
-    slotsWrap.className = "slots";
+    slotsWrap.className = "boxSlots";
+
     for (const letter of ["A", "B", "C", "D"]) {
       const sid = `${boxNum}${letter}`;
-      slotsWrap.appendChild(slotEl(sid, `Slot ${letter}`, metaFor(sid), sid === active));
+      const m = metaFor(sid);
+      const isAct = sid === active;
+
+      const pod = document.createElement("div");
+      pod.className = "slotPod" + (isAct ? " active" : "");
+      pod.dataset.slotid = sid;
+
+      // Slot ID badge
+      const idBadge = document.createElement("div");
+      idBadge.className = "slotPodId";
+      idBadge.textContent = sid;
+      pod.appendChild(idBadge);
+
+      // Spool graphic
+      const spoolWrap = document.createElement("div");
+      spoolWrap.className = "slotPodSpool";
+      spoolWrap.innerHTML = makeSpoolSvg(m);
+      pod.appendChild(spoolWrap);
+
+      // Material
+      const matEl = document.createElement("div");
+      matEl.className = "slotPodMaterial";
+      matEl.textContent = m.material || "—";
+      pod.appendChild(matEl);
+
+      // Percent remaining (if available from CFS)
+      if (m.percent != null) {
+        const pctEl = document.createElement("div");
+        pctEl.className = "slotPodPct";
+        pctEl.textContent = m.percent + "%";
+        pod.appendChild(pctEl);
+      }
+
+      // Bottom icon: eye for active, pencil for others
+      const iconEl = document.createElement("div");
+      iconEl.className = "slotPodIcon";
+      iconEl.textContent = isAct ? "◉" : "✏";
+      pod.appendChild(iconEl);
+
+      pod.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        openSpoolModal(sid, m);
+      });
+
+      slotsWrap.appendChild(pod);
     }
-    card.appendChild(slotsWrap);
-    return card;
+
+    row.appendChild(slotsWrap);
+    return row;
   }
 
   for (const b of connectedBoxes) {
