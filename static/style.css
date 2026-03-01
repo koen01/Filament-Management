@@ -107,8 +107,8 @@ body{
 .slotPodSpool svg{width:72px;height:72px}
 .slotPodMaterial{font-size:14px;font-weight:700;color:var(--text);text-align:center;min-height:18px}
 .slotPodPct{font-size:11px;color:var(--muted);text-align:center}
-.slotPodIcon{font-size:13px;color:var(--muted);opacity:.65}
-.slotPod.active .slotPodIcon{color:var(--ok);opacity:1}
+.slotPodLink{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.12);margin-top:2px}
+.slotPodLink.linked{background:rgba(31,157,85,.75);box-shadow:0 0 5px rgba(31,157,85,.4)}
 @media(max-width:600px){
   .boxHeader{width:54px;min-width:54px;font-size:12px}
   .boxSlots{gap:5px}

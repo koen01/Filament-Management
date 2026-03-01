@@ -663,11 +663,11 @@ function render(state) {
         pod.appendChild(pctEl);
       }
 
-      // Bottom icon: eye for active, pencil for others
-      const iconEl = document.createElement("div");
-      iconEl.className = "slotPodIcon";
-      iconEl.textContent = isAct ? "◉" : "✏";
-      pod.appendChild(iconEl);
+      // Spoolman link indicator dot
+      const linkDot = document.createElement("div");
+      linkDot.className = "slotPodLink" + (m.spoolman_id ? " linked" : "");
+      linkDot.title = m.spoolman_id ? "Linked to Spoolman #" + m.spoolman_id : "Not linked to Spoolman";
+      pod.appendChild(linkDot);
 
       pod.addEventListener("click", (ev) => {
         ev.preventDefault();
