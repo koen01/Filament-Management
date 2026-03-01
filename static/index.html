@@ -65,11 +65,16 @@
 
       <footer class="footer">
         <span>Tip: If colors/material are not shown, set <code>printer_url</code> in <code>data/config.json</code> to your printer's IP.</span>
+        <span class="footerSep">·</span>
+        <span class="footerBookmark">
+          <a id="fluiddBookmarklet" class="footerLink" href="#" title="Drag to bookmarks bar, then click in Fluidd to replace the Runout Sensors card with live CFS status">Fluidd panel</a>
+          <button id="fluiddCopyBtn" class="footerCopyBtn" title="Copy bookmarklet to clipboard">⎘</button>
+        </span>
       </footer>
     </main>
 
     <!-- cache-bust: force clients to fetch latest app.js after updates -->
-    <script src="/static/app.js?v=20260225-3"></script>
+    <script src="/static/app.js?v=20260301-1"></script>
 
     <!-- Slot / Spool editor (local bookkeeping only; never talks to printer) -->
     <div id="spoolModal" class="modal" style="display:none;">

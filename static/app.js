@@ -761,9 +761,35 @@ function initRefreshControls() {
   applyRefreshTimer();
 }
 
+function initFluiddBookmarklet() {
+  const origin = window.location.origin;
+  const code = "javascript:(function(){window.CFSYNC_URL='" + origin + "';" +
+    "var s=document.createElement('script');" +
+    "s.src='" + origin + "/static/fluidd-panel.js?v=1&t='+Date.now();" +
+    "document.head.appendChild(s);})();";
+
+  const link = document.getElementById('fluiddBookmarklet');
+  if (link) link.href = code;
+
+  const btn = document.getElementById('fluiddCopyBtn');
+  if (btn) {
+    btn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(code);
+        const prev = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = prev; }, 2000);
+      } catch (_) {
+        prompt('Copy this bookmarklet URL and save it as a browser bookmark:', code);
+      }
+    };
+  }
+}
+
 function boot() {
   initSpoolModal();
   initRefreshControls();
+  initFluiddBookmarklet();
   tick();
 }
 

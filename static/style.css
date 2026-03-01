@@ -255,7 +255,13 @@ body{
   font-size:12px;
 }
 
-.footer{margin:18px 2px 0;color:var(--muted);font-size:12px}
+.footer{margin:18px 2px 0;color:var(--muted);font-size:12px;display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.footerSep{opacity:.35}
+.footerBookmark{display:inline-flex;align-items:center;gap:5px}
+.footerLink{color:var(--muted);text-decoration:underline;text-decoration-style:dotted;cursor:grab}
+.footerLink:hover{color:var(--text)}
+.footerCopyBtn{font-size:11px;padding:2px 6px;border-radius:6px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);cursor:pointer;line-height:1.4}
+.footerCopyBtn:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
 code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
 
 .history{padding:12px 14px 14px; display:flex; flex-direction:column; gap:12px;}
