@@ -249,16 +249,31 @@ def _migrate_state_dict(data: dict) -> dict:
     return data
 
 
+_state_load_failed: bool = False  # True when last load fell back to default
+
 def load_state() -> AppState:
+    global _state_load_failed
     _ensure_data_files()
     try:
         data = json.loads(STATE_PATH.read_text())
         data = _migrate_state_dict(data)
-        return _model_validate(AppState, data)
+        result = _model_validate(AppState, data)
+        _state_load_failed = False
+        return result
     except Exception as e:
         # Corrupt/partial state files should never prevent the app from starting.
         print(f"[STATE] load failed: {e}")
+        _state_load_failed = True
         return default_state()
+
+
+def save_state(state: AppState) -> None:
+    # Never overwrite real state with a fallback default — that destroys user data.
+    if _state_load_failed:
+        print("[STATE] save skipped: last load returned fallback default")
+        return
+    state.updated_at = _now()
+    STATE_PATH.write_text(json.dumps(_model_dump(state), indent=2, ensure_ascii=False))
 
 
 
@@ -605,11 +620,12 @@ def _parse_ws_cfs_data(payload: dict) -> None:
 async def _ws_connect_and_run(ws_url: str) -> None:
     """Open one WebSocket connection to the printer and run the polling loop."""
     async with websockets.connect(ws_url, ping_interval=None, ping_timeout=None) as ws:
-        # The printer pushes an unsolicited status JSON immediately on connect.
-        # Drain those initial messages before initiating the heartbeat handshake.
-        while True:
+        # The printer pushes unsolicited status messages continuously.
+        # Drain for at most 2 seconds so queued messages don't block the handshake.
+        drain_deadline = asyncio.get_event_loop().time() + 2.0
+        while asyncio.get_event_loop().time() < drain_deadline:
             try:
-                drained = await asyncio.wait_for(ws.recv(), timeout=1.5)
+                drained = await asyncio.wait_for(ws.recv(), timeout=0.3)
                 print(f"[WS] Drained {len(str(drained))} byte initial message")
             except asyncio.TimeoutError:
                 break
