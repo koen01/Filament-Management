@@ -1220,9 +1220,13 @@ def api_ui_spoolman_link(req: SpoolmanLinkRequest) -> ApiResponse:
     state.slots[slot] = s
     save_state(state)
 
-    # Write the slot's CFS RFID to the Spoolman spool's extra field for future auto-linking
-    rfid = (state.cfs_slots.get(slot) or {}).get("rfid", "")
-    if rfid:
+    # Write the slot's CFS RFID to the Spoolman spool's extra field for future auto-linking.
+    # Only do this when the slot is state=2 (physical RFID chip detected). state=1 (manual)
+    # slots may carry a non-empty rfid field in the WS data (residual/bleed from adjacent slot)
+    # that must not be written, otherwise two different spools end up with the same cfs_rfid.
+    cfs_slot_data = state.cfs_slots.get(slot) or {}
+    rfid = cfs_slot_data.get("rfid", "")
+    if rfid and cfs_slot_data.get("state") == 2:
         _spoolman_set_extra(req.spoolman_id, "cfs_rfid", rfid)
         _ws_last_rfid[slot] = rfid  # mark as seen so auto-link doesn't re-trigger this cycle
 
