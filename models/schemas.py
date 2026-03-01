@@ -65,6 +65,10 @@ class AppState(BaseModel):
     # Used to compute Spoolman usage deltas between updates.
     ws_slot_length_m: Dict[str, float] = Field(default_factory=dict)
 
+    # Printer identity from WS status messages
+    printer_name: str = ""
+    printer_firmware: str = ""
+
     @field_validator("updated_at", mode="before")
     @classmethod
     def normalize_updated_at(cls, v: Any):

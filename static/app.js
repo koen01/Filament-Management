@@ -526,6 +526,13 @@ function makeSpoolSvg(meta) {
 }
 
 function render(state) {
+  // Update subtitle with printer identity from WS
+  const sub = $("printerSubtitle");
+  if (sub) {
+    const parts = [state.printer_name, state.printer_firmware].filter(Boolean);
+    sub.textContent = parts.length ? parts.join(" · ") : "";
+  }
+
   const printerBadge = $("printerBadge");
   const cfsBadge = $("cfsBadge");
 

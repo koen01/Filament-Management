@@ -475,6 +475,13 @@ _VALID_SLOT_IDS = frozenset(
     f"{b}{l}" for b in "1234" for l in "ABCD"
 )
 
+# Log unknown WS message top-level keys once per session to aid discovery
+_ws_seen_keys: set = set()
+
+# Known WS key names for printer identity (tried in order)
+_WS_NAME_KEYS = ("machineName", "printerName", "deviceName", "model", "MachineModel", "deviceModel")
+_WS_FW_KEYS   = ("softVersion", "firmwareVersion", "version", "FirmwareVersion", "SoftwareVersion", "firmware")
+
 
 def _printer_ws_url() -> str:
     cfg = load_config()
@@ -509,6 +516,49 @@ def _normalize_ws_color(raw: str) -> str:
     if len(s) == 6:
         return "#" + s.lower()
     return raw
+
+
+def _parse_ws_printer_info(payload: dict) -> None:
+    """Extract printer name / firmware from any WS status message and persist to state.
+
+    Also logs any previously-unseen top-level keys once per session so we can
+    discover the exact field names the printer uses.
+    """
+    global _ws_seen_keys
+    new_keys = set(payload.keys()) - _ws_seen_keys
+    if new_keys:
+        _ws_seen_keys |= new_keys
+        print(f"[WS] New message keys: {sorted(new_keys)}")
+
+    name = ""
+    for k in _WS_NAME_KEYS:
+        v = str(payload.get(k) or "").strip()
+        if v:
+            name = v
+            break
+
+    fw = ""
+    for k in _WS_FW_KEYS:
+        v = str(payload.get(k) or "").strip()
+        if v:
+            fw = v
+            break
+
+    if not name and not fw:
+        return
+
+    st = load_state()
+    changed = False
+    if name and name != st.printer_name:
+        st.printer_name = name
+        changed = True
+        print(f"[WS] Printer name: {name!r}")
+    if fw and fw != st.printer_firmware:
+        st.printer_firmware = fw
+        changed = True
+        print(f"[WS] Firmware: {fw!r}")
+    if changed:
+        save_state(st)
 
 
 def _parse_ws_cfs_data(payload: dict) -> None:
@@ -676,6 +726,7 @@ async def _ws_connect_and_run(ws_url: str) -> None:
 
             try:
                 data = json.loads(msg)
+                _parse_ws_printer_info(data)
                 if "boxsInfo" in data:
                     _parse_ws_cfs_data(data)
             except Exception:
