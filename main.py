@@ -470,6 +470,7 @@ _ws_last_rfid: Dict[str, str] = {}  # slot → last seen RFID code
 
 _moon_last_state: str = ""  # last known print_stats.state from Moonraker
 _moon_job_start_lengths: Dict[str, float] = {}  # ws_slot_length_m snapshot at job start
+_moon_snapshot_pending: bool = False  # True when snapshot was empty (WS not ready), retry next tick
 
 _VALID_SLOT_IDS = frozenset(
     f"{b}{l}" for b in "1234" for l in "ABCD"
@@ -842,7 +843,21 @@ def _moon_report_job_usage(filament_mm: float) -> None:
             slot_deltas[slot] = delta
     total_delta_m = sum(slot_deltas.values())
     if not slot_deltas or total_delta_m <= 0:
-        print(f"[MOON] Job complete: {filament_mm:.0f}mm used, no WS slot deltas to attribute")
+        # Fallback: attribute to active CFS slot when WS deltas are unavailable
+        # (e.g. service restarted mid-print or WS wasn't connected at job start)
+        active = st.cfs_active_slot or st.active_slot
+        slot_obj = st.slots.get(active) if active else None
+        spool_id = getattr(slot_obj, "spoolman_id", None) if slot_obj else None
+        if spool_id:
+            mat_str = str(getattr(slot_obj, "material", "OTHER") or "OTHER")
+            g = mm_to_g(mat_str, filament_mm)
+            if g > 0:
+                _spoolman_report_usage(spool_id, g)
+                print(f"[MOON] Job complete: {filament_mm:.0f}mm → {g:.2f}g attributed to slot {active} (active slot fallback, no WS deltas)")
+            else:
+                print(f"[MOON] Job complete: {filament_mm:.0f}mm used, could not compute grams for slot {active}")
+        else:
+            print(f"[MOON] Job complete: {filament_mm:.0f}mm used, no WS slot deltas and no linked active slot to fall back to")
         _moon_job_start_lengths = {}
         return
     for slot, delta_m in slot_deltas.items():
@@ -863,7 +878,7 @@ def _moon_report_job_usage(filament_mm: float) -> None:
 
 async def moonraker_job_poll_loop() -> None:
     """Poll Moonraker print_stats every 5s and attribute filament usage at job completion."""
-    global _moon_last_state, _moon_job_start_lengths
+    global _moon_last_state, _moon_job_start_lengths, _moon_snapshot_pending
 
     base = _moonraker_base_url()
     if not base:
@@ -884,6 +899,14 @@ async def moonraker_job_poll_loop() -> None:
             new_state = str(ps.get("state") or "").lower()
             filament_used_mm = float(ps.get("filament_used") or 0)
 
+            # Re-snapshot if startup race left us with an empty snapshot
+            if _moon_snapshot_pending and new_state in _ACTIVE_STATES:
+                st_ws = load_state()
+                if st_ws.ws_slot_length_m:
+                    _moon_job_start_lengths = dict(st_ws.ws_slot_length_m)
+                    _moon_snapshot_pending = False
+                    print(f"[MOON] Re-snapshotted {len(_moon_job_start_lengths)} slot lengths (WS now ready)")
+
             prev = _moon_last_state
             if new_state == prev:
                 continue
@@ -895,13 +918,20 @@ async def moonraker_job_poll_loop() -> None:
                 # Job started — snapshot current ws_slot_length_m
                 st = load_state()
                 _moon_job_start_lengths = dict(st.ws_slot_length_m)
-                print(f"[MOON] Job started; snapshotted {len(_moon_job_start_lengths)} slot lengths")
+                if not _moon_job_start_lengths:
+                    _moon_snapshot_pending = True
+                    print("[MOON] Job started; WS not ready yet, will re-snapshot when data arrives")
+                else:
+                    _moon_snapshot_pending = False
+                    print(f"[MOON] Job started; snapshotted {len(_moon_job_start_lengths)} slot lengths")
 
             elif new_state == "complete" and prev in _ACTIVE_STATES:
+                _moon_snapshot_pending = False
                 print(f"[MOON] Job complete: {filament_used_mm:.0f}mm filament used")
                 _moon_report_job_usage(filament_used_mm)
 
             elif new_state in {"error", "cancelled"} and prev in _ACTIVE_STATES:
+                _moon_snapshot_pending = False
                 print(f"[MOON] Job {new_state} — skipping usage report")
                 _moon_job_start_lengths = {}
 
