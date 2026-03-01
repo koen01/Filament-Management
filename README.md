@@ -1,14 +1,61 @@
-# Filament-Management
+# CFSync
 
-Local filament / spool tracking for Creality CFS & Klipper via Moonraker.
+A local web dashboard for managing filament spools on the **Creality K2 Plus CFS** (Colour Filament System). CFSync connects directly to the printer over WebSocket, reads live spool data from all CFS slots, and optionally syncs consumption back to [Spoolman](https://github.com/Donkie/Spoolman).
 
-Track filament usage per slot, handle color changes during prints and keep everything fully local.
+![CFSync screenshot](docs/screenshot.png)
 
-No cloud. No external services.
+## Features
 
----
+- Live CFS slot view — filament colour, material, and fill level per slot
+- RFID spool percent from printer sensor; calculated percent for non-RFID spools via Spoolman
+- Spoolman integration — link spools, track remaining weight, auto-report usage at job end
+- Moonraker job tracking — attributes `filament_used` proportionally across active slots at print completion
+- Printer name and firmware version shown in header (read from WebSocket)
+- Dark UI, no build step, runs as a systemd service
 
-## 🚀 Installation (One-Liner)
+## Requirements
+
+- Linux host on the same network as the printer (e.g. a Pi or the printer's companion board)
+- Creality K2 Plus with CFS
+- Python 3.10+
+- Optional: [Spoolman](https://github.com/Donkie/Spoolman) for spool tracking
+
+## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jkef80/Filament-Management/main/install.sh | sudo bash
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/koen01/Filament-Management/main/install.sh)
+```
+
+The installer will prompt for:
+
+| Prompt | Example |
+|---|---|
+| UI port | `8005` |
+| Printer IP | `192.168.1.144` |
+| Spoolman URL *(optional)* | `http://192.168.1.10:7912` |
+
+After install, open `http://<host-ip>:<port>` in your browser.
+
+## Configuration
+
+Settings are stored in `data/config.json`:
+
+```json
+{
+  "printer_url": "192.168.1.144",
+  "filament_diameter_mm": 1.75,
+  "spoolman_url": "http://192.168.1.10:7912"
+}
+```
+
+## Update
+
+```bash
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/koen01/Filament-Management/main/update.sh)
+```
+
+## Logs
+
+```bash
+sudo journalctl -u filament-management -f
+```
